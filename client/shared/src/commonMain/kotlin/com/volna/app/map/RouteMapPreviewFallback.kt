@@ -18,11 +18,16 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
+import com.volna.app.domain.model.GeoPoint
 import com.volna.app.domain.model.MeetingPoint
 import com.volna.app.domain.model.Route
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.min
 
 @Composable
 fun RouteMapPreviewFallback(
@@ -63,6 +68,9 @@ fun RouteMapPreviewFallback(
                 .clickable { onOpenExternal() },
         ) {
             MockRouteScreenshot(
+                // Реальная геометрия маршрута из API (F1: route.geometry).
+                // Пусто → рисуется декоративная заглушка-линия (fallback).
+                routePoints = route.geometry?.points.orEmpty(),
                 waterColor = waterColor,
                 landColor = landColor,
                 parkColor = parkColor,
@@ -77,6 +85,7 @@ fun RouteMapPreviewFallback(
 
 @Composable
 private fun MockRouteScreenshot(
+    routePoints: List<GeoPoint>,
     waterColor: Color,
     landColor: Color,
     parkColor: Color,
@@ -157,11 +166,29 @@ private fun MockRouteScreenshot(
                 cap = StrokeCap.Round,
             )
         }
-        val routePath = androidx.compose.ui.graphics.Path().apply {
-            moveTo(size.width * 0.34f, size.height * 0.57f)
-            cubicTo(size.width * 0.58f, size.height * 0.58f, size.width * 0.62f, size.height * 0.48f, size.width * 0.61f, size.height * 0.43f)
-            cubicTo(size.width * 0.6f, size.height * 0.36f, size.width * 0.72f, size.height * 0.32f, size.width * 0.82f, size.height * 0.24f)
-            lineTo(size.width * 0.82f, 0f)
+
+        // Проекция реальной геометрии маршрута на канвас (F2).
+        val projected = projectRoute(
+            points = routePoints,
+            width = size.width,
+            height = size.height,
+            padding = 28.dp.toPx(),
+        )
+        val routePath = if (projected.size >= 2) {
+            androidx.compose.ui.graphics.Path().apply {
+                moveTo(projected.first().x, projected.first().y)
+                for (i in 1 until projected.size) {
+                    lineTo(projected[i].x, projected[i].y)
+                }
+            }
+        } else {
+            // Fallback: декоративная линия, если geometry не пришла.
+            androidx.compose.ui.graphics.Path().apply {
+                moveTo(size.width * 0.34f, size.height * 0.57f)
+                cubicTo(size.width * 0.58f, size.height * 0.58f, size.width * 0.62f, size.height * 0.48f, size.width * 0.61f, size.height * 0.43f)
+                cubicTo(size.width * 0.6f, size.height * 0.36f, size.width * 0.72f, size.height * 0.32f, size.width * 0.82f, size.height * 0.24f)
+                lineTo(size.width * 0.82f, 0f)
+            }
         }
         drawPath(
             path = routePath,
@@ -169,9 +196,16 @@ private fun MockRouteScreenshot(
             style = androidx.compose.ui.graphics.drawscope.Stroke(
                 width = 3.dp.toPx(),
                 cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
             ),
         )
-        val pinCenter = Offset(size.width * 0.34f, size.height * 0.57f)
+
+        // Пин в начале маршрута (первая точка geometry либо начало декоративной линии).
+        val pinCenter = if (projected.isNotEmpty()) {
+            projected.first()
+        } else {
+            Offset(size.width * 0.34f, size.height * 0.57f)
+        }
         drawCircle(
             color = routeColor.copy(alpha = 0.16f),
             radius = 32.dp.toPx(),
@@ -187,5 +221,54 @@ private fun MockRouteScreenshot(
             radius = 3.dp.toPx(),
             center = pinCenter,
         )
+    }
+}
+
+/**
+ * Проецирует географические координаты маршрута в точки канваса.
+ *
+ * - долгота корректируется на cos(широты), чтобы форма не растягивалась по горизонтали;
+ * - единый масштаб по обеим осям (форма не искажается) + центрирование;
+ * - ось Y инвертируется (север — вверху).
+ *
+ * Возвращает пустой список, если точек меньше двух.
+ */
+private fun projectRoute(
+    points: List<GeoPoint>,
+    width: Float,
+    height: Float,
+    padding: Float,
+): List<Offset> {
+    if (points.size < 2) return emptyList()
+
+    val midLatRad = (points.sumOf { it.lat } / points.size) * (PI / 180.0)
+    val cosLat = cos(midLatRad)
+
+    // Корректированные плоские координаты: x = lng*cos(lat), y = lat.
+    val xs = points.map { it.lng * cosLat }
+    val ys = points.map { it.lat }
+    val minX = xs.min()
+    val maxX = xs.max()
+    val minY = ys.min()
+    val maxY = ys.max()
+
+    val epsilon = 1e-9
+    val spanX = (maxX - minX).takeIf { it > epsilon } ?: epsilon
+    val spanY = (maxY - minY).takeIf { it > epsilon } ?: epsilon
+
+    val innerW = (width - 2 * padding).coerceAtLeast(1f)
+    val innerH = (height - 2 * padding).coerceAtLeast(1f)
+
+    val scale = min(innerW / spanX, innerH / spanY)
+    val drawnW = (spanX * scale).toFloat()
+    val drawnH = (spanY * scale).toFloat()
+    val offsetX = padding + (innerW - drawnW) / 2f
+    val offsetY = padding + (innerH - drawnH) / 2f
+
+    return points.map { p ->
+        val x = offsetX + ((p.lng * cosLat - minX) * scale).toFloat()
+        // инверсия Y: большая широта (север) → меньший y (верх экрана)
+        val y = offsetY + ((maxY - p.lat) * scale).toFloat()
+        Offset(x, y)
     }
 }
