@@ -163,9 +163,18 @@ func (r *BookingRepository) List(ctx context.Context, clientID string, command b
 	}
 
 	queryArgs := append(args, command.Limit, command.Offset)
+	// Двунаправленная сортировка под пагинацию (SCR-005, AC-002/AC-003):
+	//   1) предстоящие (start_at >= now) идут раньше прошедших;
+	//   2) внутри предстоящих — по возрастанию start_at (ближайшая прогулка первой, AC-002);
+	//   3) внутри прошедших — по убыванию start_at (свежая первой, AC-003).
+	// Раньше было плоское ORDER BY s.start_at DESC: первая страница набивалась дальними будущими
+	// бронями, ближайшая предстоящая не попадала в первый экран ленивой загрузки (R-025).
 	rows, err := r.db.Query(ctx, bookingSelectSQL()+`
 `+where+`
-ORDER BY s.start_at DESC, b.created_at DESC
+ORDER BY (CASE WHEN s.start_at >= NOW() THEN 0 ELSE 1 END),
+         CASE WHEN s.start_at >= NOW() THEN s.start_at END ASC,
+         s.start_at DESC,
+         b.created_at DESC
 LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), queryArgs...)
 	if err != nil {
 		return booking.BookingList{}, fmt.Errorf("query bookings: %w", err)
