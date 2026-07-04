@@ -35,7 +35,7 @@ func TestAuthVerifyAndLogoutFlow(t *testing.T) {
 	}
 
 	service := auth.NewService(repo, slog.Default())
-	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{Auth: handlers.NewAuthHandler(service)})
+	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{Auth: handlers.NewAuthHandler(service, true)})
 
 	verifyBody := bytes.NewBufferString(`{"phone":"+79991234567","code":"123456"}`)
 	verifyRecorder := httptest.NewRecorder()
@@ -79,7 +79,7 @@ func TestAuthRequestCodeReturnsDemoCode(t *testing.T) {
 	t.Cleanup(db.Close)
 
 	service := auth.NewService(postgres.NewAuthRepository(db), slog.Default())
-	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{Auth: handlers.NewAuthHandler(service)})
+	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{Auth: handlers.NewAuthHandler(service, true)})
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/auth/request-code", bytes.NewBufferString(`{"phone":"+79991234567"}`)))

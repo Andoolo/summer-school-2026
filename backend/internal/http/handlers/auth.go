@@ -13,10 +13,13 @@ import (
 
 type AuthHandler struct {
 	service *auth.Service
+	// dev true → разрешено возвращать OTP-код в ответе (для ручной проверки без SMS).
+	// В production код никогда не возвращается клиенту (флаг берётся из APP_ENV).
+	dev bool
 }
 
-func NewAuthHandler(service *auth.Service) *AuthHandler {
-	return &AuthHandler{service: service}
+func NewAuthHandler(service *auth.Service, dev bool) *AuthHandler {
+	return &AuthHandler{service: service, dev: dev}
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -45,11 +48,18 @@ func (h *AuthHandler) RequestAuthCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpapi.WriteJSON(w, http.StatusOK, authapi.RequestCodeResponse{
+	// OTP-код возвращается ТОЛЬКО в dev (APP_ENV != "production").
+	// В production клиент получает только TTL/resend_after, без самого кода —
+	// код доставляется отдельным каналом (SMS).
+	response := authapi.RequestCodeResponse{
 		TtlSeconds:         result.TTLSeconds,
 		ResendAfterSeconds: result.ResendAfterSeconds,
-		Code:               &result.Code,
-	})
+	}
+	if h.dev {
+		response.Code = &result.Code
+	}
+
+	httpapi.WriteJSON(w, http.StatusOK, response)
 }
 
 func (h *AuthHandler) VerifyAuthCode(w http.ResponseWriter, r *http.Request) {

@@ -11,6 +11,10 @@ type Config struct {
 	HTTPAddr        string
 	DatabaseURL     string
 	ShutdownTimeout time.Duration
+	// Dev true в окружениях, отличных от production.
+	// В dev разрешено возвращать OTP-код в ответе /auth/request-code (для ручной проверки
+	// без реальной отправки SMS). В production код никогда не возвращается клиенту.
+	Dev bool
 }
 
 func Load() (Config, error) {
@@ -23,6 +27,7 @@ func Load() (Config, error) {
 		HTTPAddr:        stringFromEnv("HTTP_ADDR", ":8080"),
 		DatabaseURL:     stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
 		ShutdownTimeout: shutdownTimeout,
+		Dev:             boolFromEnvIsNot("APP_ENV", "production"),
 	}, nil
 }
 
@@ -32,6 +37,12 @@ func stringFromEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// boolFromEnvIsNot возвращает true, если значение env-переменной key не равно forbidden.
+// Используется для флага Dev: всё, что не "production" — считаем dev (безопасный дефолт).
+func boolFromEnvIsNot(key, forbidden string) bool {
+	return os.Getenv(key) != forbidden
 }
 
 func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) {

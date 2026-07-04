@@ -40,7 +40,7 @@ func main() {
 
 	authRepo := postgres.NewAuthRepository(db)
 	authService := auth.NewService(authRepo, logger)
-	authHandler := handlers.NewAuthHandler(authService)
+	authHandler := handlers.NewAuthHandler(authService, cfg.Dev)
 	profileRepo := postgres.NewProfileRepository(db)
 	profileService := profile.NewService(profileRepo, logger)
 	profileHandler := handlers.NewProfileHandler(profileService)
