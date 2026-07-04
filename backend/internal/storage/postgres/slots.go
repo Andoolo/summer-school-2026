@@ -18,6 +18,7 @@ type Slot struct {
 	RouteType        string
 	RouteCapacityCap int
 	RouteDurationMin int
+	RouteGeometry    []byte // сырой jsonb геометрии маршрута ([[lat,lng],...] или null)
 	InstructorID     string
 	InstructorName   string
 	StartAt          time.Time
@@ -77,6 +78,7 @@ SELECT
     r.type,
     r.capacity_cap,
     r.duration_min,
+    r.geometry,
     i.id::text,
     i.name,
     s.start_at,
@@ -110,6 +112,7 @@ LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), queryArgs.
 			&slot.RouteType,
 			&slot.RouteCapacityCap,
 			&slot.RouteDurationMin,
+			&slot.RouteGeometry,
 			&slot.InstructorID,
 			&slot.InstructorName,
 			&slot.StartAt,
@@ -144,6 +147,7 @@ SELECT
     r.type,
     r.capacity_cap,
     r.duration_min,
+    r.geometry,
     i.id::text,
     i.name,
     s.start_at,
@@ -166,6 +170,7 @@ WHERE s.id = $1`, id).Scan(
 		&slot.RouteType,
 		&slot.RouteCapacityCap,
 		&slot.RouteDurationMin,
+		&slot.RouteGeometry,
 		&slot.InstructorID,
 		&slot.InstructorName,
 		&slot.StartAt,

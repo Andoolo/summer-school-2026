@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	httpapi "summer-school-2026/backend/internal/http"
@@ -188,15 +190,29 @@ func slotBase(slot postgres.Slot) (slotBaseDTO, error) {
 	if err != nil {
 		return slotBaseDTO{}, err
 	}
+	route := slotsapi.Route{
+		Id:          routeID,
+		Name:        slot.RouteName,
+		Type:        slotsapi.RouteType(slot.RouteType),
+		CapacityCap: slot.RouteCapacityCap,
+		DurationMin: slot.RouteDurationMin,
+	}
+	// geometry — обязательное поле Route по контракту (маршрут для карты, SCR-003).
+	// В БД хранится как jsonb-массив координат [[lat,lng],...]; кладём в union-вариант Geometry0.
+	if len(slot.RouteGeometry) > 0 {
+		var coords [][]float32
+		if err := json.Unmarshal(slot.RouteGeometry, &coords); err != nil {
+			return slotBaseDTO{}, fmt.Errorf("decode route geometry: %w", err)
+		}
+		var geometry slotsapi.Geometry
+		if err := geometry.FromGeometry0(coords); err != nil {
+			return slotBaseDTO{}, fmt.Errorf("encode route geometry: %w", err)
+		}
+		route.Geometry = &geometry
+	}
 	return slotBaseDTO{
-		id: slotID,
-		route: slotsapi.Route{
-			Id:          routeID,
-			Name:        slot.RouteName,
-			Type:        slotsapi.RouteType(slot.RouteType),
-			CapacityCap: slot.RouteCapacityCap,
-			DurationMin: slot.RouteDurationMin,
-		},
+		id:         slotID,
+		route:      route,
 		instructor: slotsapi.Instructor{Id: instructorID, Name: slot.InstructorName},
 	}, nil
 }
