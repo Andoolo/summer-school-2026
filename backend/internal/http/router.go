@@ -23,6 +23,9 @@ type RouterOptions struct {
 	Bookings    bookingsapi.ServerInterface
 	Slots       slotsapi.ServerInterface
 	Instructors instructorsapi.ServerInterface
+	// AuthRefresh — ручной маршрут POST /auth/refresh (обмен refresh-токена).
+	// В сгенерированном транспорте auth его пока нет, поэтому регистрируется отдельно.
+	AuthRefresh http.HandlerFunc
 }
 
 func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
@@ -49,6 +52,9 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	router.Get("/readyz", healthHandler)
 	if opts.Auth != nil {
 		authapi.HandlerWithOptions(opts.Auth, authapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})
+	}
+	if opts.AuthRefresh != nil {
+		router.Post("/auth/refresh", opts.AuthRefresh)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})

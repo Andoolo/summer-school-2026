@@ -53,6 +53,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(logger, httpapi.RouterOptions{
 			Auth:        authHandler,
+			AuthRefresh: authHandler.Refresh,
 			Profile:     profileHandler,
 			Bookings:    bookingHandler,
 			Slots:       slotHandler,

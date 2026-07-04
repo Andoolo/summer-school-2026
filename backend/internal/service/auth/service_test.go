@@ -111,3 +111,17 @@ func (r *fakeRepo) CreateClient(context.Context, string, time.Time) (Client, err
 func (r *fakeRepo) CreateSession(context.Context, string, string, time.Time) error { return nil }
 
 func (r *fakeRepo) RevokeSession(context.Context, string, time.Time) error { return nil }
+
+func (r *fakeRepo) SessionClientID(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (r *fakeRepo) CreateRefreshToken(context.Context, string, string, time.Time) error { return nil }
+
+func (r *fakeRepo) RefreshTokenClientID(context.Context, string, time.Time) (string, bool, error) {
+	return "", false, nil
+}
+
+func (r *fakeRepo) RevokeRefreshToken(context.Context, string, time.Time) error { return nil }
+
+func (r *fakeRepo) RevokeClientRefreshTokens(context.Context, string, time.Time) error { return nil }

@@ -81,8 +81,15 @@ func (h *AuthHandler) VerifyAuthCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpapi.WriteJSON(w, http.StatusOK, authapi.VerifyCodeResponse{
+	// Ответ — супермножество контракта: одиночный `token` (обратная совместимость с текущим
+	// клиентом) + `tokens` (пара access/refresh по контракту TokenPair). refresh используется
+	// только на /auth/refresh.
+	httpapi.WriteJSON(w, http.StatusOK, verifyCodeResponseDTO{
 		Token: result.Token,
+		Tokens: tokenPairDTO{
+			AccessToken:  result.Token,
+			RefreshToken: result.RefreshToken,
+		},
 		Client: authapi.Client{
 			Id:        clientID,
 			Name:      result.Client.Name,
@@ -91,6 +98,48 @@ func (h *AuthHandler) VerifyAuthCode(w http.ResponseWriter, r *http.Request) {
 		},
 		IsNew: result.IsNew,
 	})
+}
+
+// Refresh обменивает refresh-токен на новую пару токенов (POST /auth/refresh).
+// Маршрут регистрируется вручную (см. RouterOptions.AuthRefresh) — в сгенерированном
+// транспорте auth его пока нет.
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := httpapi.DecodeJSON(r, &req); err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, "Неверные параметры запроса. Проверьте корректность переданных значений.", nil)
+		return
+	}
+
+	result, err := h.service.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidSession) {
+			httpapi.WriteError(w, http.StatusUnauthorized, httpapi.CodeUnauthorized, "Сессия недействительна. Войдите повторно.", nil)
+			return
+		}
+		httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
+		return
+	}
+
+	httpapi.WriteJSON(w, http.StatusOK, tokenPairDTO{
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+	})
+}
+
+// tokenPairDTO повторяет схему TokenPair контракта (access_token + refresh_token).
+type tokenPairDTO struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// verifyCodeResponseDTO — ответ verify-code: одиночный token (обратная совместимость) + tokens.
+type verifyCodeResponseDTO struct {
+	Token  string         `json:"token"`
+	Tokens tokenPairDTO   `json:"tokens"`
+	Client authapi.Client `json:"client"`
+	IsNew  bool           `json:"is_new"`
 }
 
 func writeAuthError(w http.ResponseWriter, err error) {

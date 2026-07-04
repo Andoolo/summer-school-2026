@@ -110,3 +110,68 @@ WHERE token_hash = $1 AND revoked_at IS NULL`, tokenHash, now)
 	}
 	return nil
 }
+
+// SessionClientID возвращает client_id живой (не отозванной, не истёкшей) access-сессии по хешу.
+func (r *AuthRepository) SessionClientID(ctx context.Context, tokenHash string) (string, bool, error) {
+	var clientID string
+	err := r.db.QueryRow(ctx, `
+SELECT client_id::text
+FROM auth_sessions
+WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()`, tokenHash).Scan(&clientID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("query session client: %w", err)
+	}
+	return clientID, true, nil
+}
+
+func (r *AuthRepository) CreateRefreshToken(ctx context.Context, clientID, tokenHash string, expiresAt time.Time) error {
+	_, err := r.db.Exec(ctx, `
+INSERT INTO refresh_tokens (client_id, token_hash, expires_at)
+VALUES ($1, $2, $3)`, clientID, tokenHash, expiresAt)
+	if err != nil {
+		return fmt.Errorf("create refresh token: %w", err)
+	}
+	return nil
+}
+
+// RefreshTokenClientID возвращает client_id действительного refresh-токена по хешу
+// (не отозван, не истёк на момент now).
+func (r *AuthRepository) RefreshTokenClientID(ctx context.Context, tokenHash string, now time.Time) (string, bool, error) {
+	var clientID string
+	err := r.db.QueryRow(ctx, `
+SELECT client_id::text
+FROM refresh_tokens
+WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`, tokenHash, now).Scan(&clientID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("query refresh token: %w", err)
+	}
+	return clientID, true, nil
+}
+
+func (r *AuthRepository) RevokeRefreshToken(ctx context.Context, tokenHash string, now time.Time) error {
+	_, err := r.db.Exec(ctx, `
+UPDATE refresh_tokens
+SET revoked_at = $2
+WHERE token_hash = $1 AND revoked_at IS NULL`, tokenHash, now)
+	if err != nil {
+		return fmt.Errorf("revoke refresh token: %w", err)
+	}
+	return nil
+}
+
+func (r *AuthRepository) RevokeClientRefreshTokens(ctx context.Context, clientID string, now time.Time) error {
+	_, err := r.db.Exec(ctx, `
+UPDATE refresh_tokens
+SET revoked_at = $2
+WHERE client_id = $1 AND revoked_at IS NULL`, clientID, now)
+	if err != nil {
+		return fmt.Errorf("revoke client refresh tokens: %w", err)
+	}
+	return nil
+}

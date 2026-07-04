@@ -41,9 +41,16 @@ type RequestCodeResult struct {
 }
 
 type VerifyCodeResult struct {
-	Token  string
-	Client Client
-	IsNew  bool
+	Token        string // access-токен сессии (кладётся в Authorization)
+	RefreshToken string // refresh-токен для обновления сессии через /auth/refresh
+	Client       Client
+	IsNew        bool
+}
+
+// RefreshResult — новая пара токенов после обмена refresh-токена (/auth/refresh).
+type RefreshResult struct {
+	AccessToken  string
+	RefreshToken string
 }
 
 type Repository interface {
@@ -55,6 +62,11 @@ type Repository interface {
 	CreateClient(ctx context.Context, phone string, now time.Time) (Client, error)
 	CreateSession(ctx context.Context, clientID, tokenHash string, expiresAt time.Time) error
 	RevokeSession(ctx context.Context, tokenHash string, now time.Time) error
+	SessionClientID(ctx context.Context, tokenHash string) (string, bool, error)
+	CreateRefreshToken(ctx context.Context, clientID, tokenHash string, expiresAt time.Time) error
+	RefreshTokenClientID(ctx context.Context, tokenHash string, now time.Time) (string, bool, error)
+	RevokeRefreshToken(ctx context.Context, tokenHash string, now time.Time) error
+	RevokeClientRefreshTokens(ctx context.Context, clientID string, now time.Time) error
 }
 
 type OTP struct {
@@ -73,6 +85,7 @@ type Service struct {
 	codeTTL     time.Duration
 	resendAfter time.Duration
 	sessionTTL  time.Duration
+	refreshTTL  time.Duration
 	maxAttempts int
 }
 
@@ -87,6 +100,7 @@ func NewService(repo Repository, logger *slog.Logger) *Service {
 		codeTTL:     5 * time.Minute,
 		resendAfter: time.Minute,
 		sessionTTL:  24 * time.Hour,
+		refreshTTL:  30 * 24 * time.Hour,
 		maxAttempts: 5,
 	}
 }
@@ -155,18 +169,80 @@ func (s *Service) VerifyCode(ctx context.Context, phone, code string) (VerifyCod
 	if err := s.repo.CreateSession(ctx, client.ID, HashToken(token), now.Add(s.sessionTTL)); err != nil {
 		return VerifyCodeResult{}, err
 	}
+	refresh, err := randomToken()
+	if err != nil {
+		return VerifyCodeResult{}, err
+	}
+	if err := s.repo.CreateRefreshToken(ctx, client.ID, HashToken(refresh), now.Add(s.refreshTTL)); err != nil {
+		return VerifyCodeResult{}, err
+	}
 	if err := s.repo.ConsumeOTP(ctx, otp.ID, now); err != nil {
 		return VerifyCodeResult{}, err
 	}
 
-	return VerifyCodeResult{Token: token, Client: client, IsNew: isNew}, nil
+	return VerifyCodeResult{Token: token, RefreshToken: refresh, Client: client, IsNew: isNew}, nil
+}
+
+// Refresh обменивает действительный refresh-токен на новую пару access+refresh (R-016).
+// Ротация: старый refresh инвалидируется, выдаётся новый access-сессия + новый refresh.
+// Недействительный/просроченный/отозванный refresh → ErrInvalidSession (→ 401 в handler).
+func (s *Service) Refresh(ctx context.Context, refreshToken string) (RefreshResult, error) {
+	if refreshToken == "" {
+		return RefreshResult{}, ErrInvalidSession
+	}
+	now := s.now().UTC()
+	oldHash := HashToken(refreshToken)
+	clientID, ok, err := s.repo.RefreshTokenClientID(ctx, oldHash, now)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	if !ok {
+		return RefreshResult{}, ErrInvalidSession
+	}
+	// Ротация: гасим предъявленный refresh перед выдачей новой пары.
+	if err := s.repo.RevokeRefreshToken(ctx, oldHash, now); err != nil {
+		return RefreshResult{}, err
+	}
+
+	access, err := randomToken()
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	if err := s.repo.CreateSession(ctx, clientID, HashToken(access), now.Add(s.sessionTTL)); err != nil {
+		return RefreshResult{}, err
+	}
+	refresh, err := randomToken()
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	if err := s.repo.CreateRefreshToken(ctx, clientID, HashToken(refresh), now.Add(s.refreshTTL)); err != nil {
+		return RefreshResult{}, err
+	}
+
+	return RefreshResult{AccessToken: access, RefreshToken: refresh}, nil
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {
 	if token == "" {
 		return ErrInvalidSession
 	}
-	return s.repo.RevokeSession(ctx, HashToken(token), s.now().UTC())
+	now := s.now().UTC()
+	hash := HashToken(token)
+	// Гасим и access-сессию, и все refresh-токены клиента: после выхода refresh
+	// непригоден для /auth/refresh (R-016).
+	clientID, ok, err := s.repo.SessionClientID(ctx, hash)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.RevokeSession(ctx, hash, now); err != nil {
+		return err
+	}
+	if ok {
+		if err := s.repo.RevokeClientRefreshTokens(ctx, clientID, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func HashOTP(phone, purpose, code string) string {
