@@ -1,0 +1,38 @@
+<svg width="1000" height="260" viewBox="0 0 1000 260" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Roboto, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B3B57"/>
+      <stop offset="0.55" stop-color="#0E7C8B"/>
+      <stop offset="1" stop-color="#00A59D"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8BD1F1" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#8BD1F1" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="260" rx="18" fill="url(#bg)"/>
+  <!-- волны -->
+  <path d="M0,196 C160,166 260,226 420,196 C580,166 700,226 1000,190 L1000,260 L0,260 Z" fill="url(#wave)"/>
+  <path d="M0,220 C180,196 300,244 480,218 C660,192 820,244 1000,214 L1000,260 L0,260 Z" fill="#8BD1F1" opacity="0.14"/>
+
+  <text x="48" y="86" fill="#FFFFFF" font-size="42" font-weight="800">Летняя школа Surf · 2026</text>
+  <text x="48" y="122" fill="#CFF3F0" font-size="20" font-weight="500">Анализ · Разработка · Тестирование — с ИИ-ассистентами</text>
+
+  <!-- блоки -->
+  <g font-size="15" font-weight="700">
+    <rect x="48" y="150" width="196" height="40" rx="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="66" y="175" fill="#FFFFFF">01 · Анализ (Картинг)</text>
+
+    <rect x="256" y="150" width="252" height="40" rx="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="274" y="175" fill="#FFFFFF">02 · Разработка · 3 бага + 3 фичи</text>
+
+    <rect x="520" y="150" width="208" height="40" rx="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="538" y="175" fill="#FFFFFF">03 · Тестирование · 3 столпа</text>
+  </g>
+
+  <!-- тех-стек -->
+  <text x="48" y="232" fill="#EAFBF9" font-size="14" font-weight="600" letter-spacing="0.5">
+    Go 1.25 · PostgreSQL · Kotlin 2.2 · Compose Multiplatform (Android/iOS/Web) · Docker
+  </text>
+</svg>

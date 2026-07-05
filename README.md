@@ -1,93 +1,108 @@
-# Summer School 2026
+<p align="center">
+  <img src="docs/banner.svg" alt="Летняя школа Surf 2026" width="100%"/>
+</p>
+
+<p align="center">
+  <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2.20-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Compose Multiplatform" src="https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
+  <img alt="tests" src="https://img.shields.io/badge/go%20test-passing-2ea44f">
+  <img alt="wasmJs" src="https://img.shields.io/badge/wasmJs-BUILD%20SUCCESSFUL-2ea44f">
+</p>
+
+<h1 align="center">Летняя школа Surf 2026 — задание</h1>
+
+<p align="center">
+  Полный цикл <b>Анализ → Разработка → Тестирование</b> с ИИ-ассистентами на несложном e-commerce.<br/>
+  Домен по брифу — <b>Картинг-центр</b>; разработка и тестирование — на референсе <b>«Волна»</b>
+  (Go backend + Kotlin Multiplatform клиент), как разрешено организаторами.
+</p>
+
+---
+
+## 🧭 Структура репозитория
+
+| Папка | Блок | Что внутри |
+|-------|------|------------|
+| [`00-analysis-karting/`](00-analysis-karting/) | **Блок 1 · Анализ (Картинг)** | требования (BR/FR/NFR/US/UC), архитектура, схема данных, дизайн-брифы, **промпты** |
+| [`01-analysis/`](01-analysis/) | Анализ «Волны» (референс) | спецификации-основа для разработки/тестирования |
+| [`02-development/`](02-development/) | **Блок 2 · Разработка** | 3 бага + 3 фичи (по `.md` на каждую) + ревью сабагентами |
+| [`03-testing/`](03-testing/) | **Блок 3 · Тестирование** | ревью требований, тест-кейсы (MD+YAML), автотесты |
+| [`backend/`](backend/) | Код · Go API | слоёная архитектура, PostgreSQL, интеграционные тесты |
+| [`client/`](client/) | Код · KMP клиент | Compose Multiplatform (Android/iOS/Web-wasmJs) |
+| [`SUBMISSION.md`](SUBMISSION.md) | 📄 Сводка | краткое описание задания и соответствие требованиям |
+
+---
+
+## 🐞 Блок 2 · Разработка — 3 бага + 3 фичи
+
+| # | Что | Тип | Документ |
+|---|-----|-----|----------|
+| **B1** | OTP-код не отдаётся вне dev (безопасность) | баг | [B1](02-development/tasks/B1-otp-code-leak.md) |
+| **B2** | Двунаправленная сортировка списка броней под пагинацию | баг | [B2](02-development/tasks/B2-booking-list-sort-order.md) |
+| **B3** | Dockerfile Go 1.23→1.25 (сборка образа) | баг | [B3](02-development/tasks/B3-dockerfile-go-version.md) |
+| **F1** | `route.geometry` в `/slots` (бэкенд) | фича | [F1](02-development/tasks/F1-route-geometry-slots.md) |
+| **F2** | Карта рисует маршрут по реальной geometry (клиент) | фича | [F2](02-development/tasks/F2-route-map-geometry.md) |
+| **F3** | `/auth/refresh` — access+refresh, ротация, logout по сессии | фича | [F3](02-development/tasks/F3-auth-refresh.md) |
+
+🔍 Ревью двумя сабагентами + исправление находок (безопасность refresh, logout по сессии и др.) —
+[REVIEW-block2.md](02-development/REVIEW-block2.md). Каждый `.md`: симптом/цель → требования →
+реализация → **промпты** → ручная проверка → commit.
+
+---
+
+## 🧪 Блок 3 · Тестирование — 3 столпа
+
+1. **Ревью требований** на тестопригодность (2 сабагента) → [requirements-review.md](03-testing/requirements-review.md)
+2. **Тест-кейсы** — план покрытия + детально по ядру, [Markdown](03-testing/test-cases/core-flows.md) + [YAML](03-testing/test-cases/test-cases.yaml)
+3. **Автотесты** — прогон покрытия + регресс-тест сортировки B2 → [autotests-report.md](03-testing/autotests-report.md)
+
+---
+
+## 🖼️ Скриншоты
+
+> Веб-версия запускается локально на `http://localhost:8081` (см. «Как запустить»):
+> экран входа, список прогулок, карточка слота с картой маршрута по реальной geometry (F1 + F2).
+
+<!-- После добавления PNG в docs/screenshots/ раскомментируй блок ниже:
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="Вход" width="30%"/>
+  <img src="docs/screenshots/slots.png" alt="Список прогулок" width="30%"/>
+  <img src="docs/screenshots/map.png" alt="Карта маршрута по geometry (F1+F2)" width="30%"/>
+</p>
+-->
 
 
+---
 
-## Getting started
+## 🚀 Как запустить локально
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+```bash
+# 1) БД + API (Docker)
+cd backend && docker compose --profile app up -d --build
+#   API: http://localhost:8080  ·  Postgres: localhost:15432
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+# 2) Веб-клиент (wasmJs, порт 8081)
+cd client && ./gradlew :webApp:wasmJsBrowserDevelopmentRun
+#   Открыть http://localhost:8081
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+# 3) Тесты бэкенда
+docker run --rm --network backend_default \
+  -e TEST_DATABASE_URL=postgres://volna:volna@db:5432/volna?sslmode=disable \
+  -v "$PWD/backend:/src" -w /src golang:1.25-alpine sh -c "go test ./..."
 ```
-cd existing_repo
-git remote add origin https://surfstudio.gitlab.yandexcloud.net/kruckih/summer-school-2026.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+---
 
-* [Set up project integrations](https://surfstudio.gitlab.yandexcloud.net/kruckih/summer-school-2026/-/settings/integrations)
+## 🛠️ Технологии и инструменты
 
-## Collaborate with your team
+- **Backend:** Go 1.25, chi, pgx / PostgreSQL, goose-миграции, слоёная архитектура (HTTP → usecase → domain → storage).
+- **Клиент:** Kotlin 2.2.20, Compose Multiplatform — Android / iOS / Web (wasmJs).
+- **Инфра:** Docker Desktop (Postgres + образ API), dev-CORS для локального веба.
+- **ИИ:** GLM-5.2 (ZCode) + Claude Opus 4.8 (Claude Code); сабагенты для ревью и тест-дизайна.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+<p align="center"><sub>Андрей Белявцев · Летняя школа Surf 2026 · выполнено с ИИ</sub></p>
