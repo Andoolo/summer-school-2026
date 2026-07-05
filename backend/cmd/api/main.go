@@ -58,6 +58,7 @@ func main() {
 			Bookings:    bookingHandler,
 			Slots:       slotHandler,
 			Instructors: instructorHandler,
+			Dev:         cfg.Dev,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
