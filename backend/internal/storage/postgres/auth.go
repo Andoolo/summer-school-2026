@@ -90,88 +90,105 @@ RETURNING id::text, name, phone, created_at`, phone, now).Scan(&client.ID, &clie
 	return client, nil
 }
 
-func (r *AuthRepository) CreateSession(ctx context.Context, clientID, tokenHash string, expiresAt time.Time) error {
-	_, err := r.db.Exec(ctx, `
-INSERT INTO auth_sessions (client_id, token_hash, expires_at)
-VALUES ($1, $2, $3)`, clientID, tokenHash, expiresAt)
+// IssueSession атомарно создаёт access-сессию и связанный с ней refresh-токен (одна транзакция).
+func (r *AuthRepository) IssueSession(ctx context.Context, clientID, accessHash, refreshHash string, accessExpiresAt, refreshExpiresAt time.Time) error {
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return fmt.Errorf("begin issue session: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var sessionID string
+	if err := tx.QueryRow(ctx, `
+INSERT INTO auth_sessions (client_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id::text`, clientID, accessHash, accessExpiresAt).Scan(&sessionID); err != nil {
+		return fmt.Errorf("insert session: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO refresh_tokens (client_id, session_id, token_hash, expires_at)
+VALUES ($1, $2, $3, $4)`, clientID, sessionID, refreshHash, refreshExpiresAt); err != nil {
+		return fmt.Errorf("insert refresh token: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit issue session: %w", err)
 	}
 	return nil
 }
 
-func (r *AuthRepository) RevokeSession(ctx context.Context, tokenHash string, now time.Time) error {
-	_, err := r.db.Exec(ctx, `
+// RotateSession атомарно (одна транзакция) гасит предъявленный refresh-токен и выдаёт новую пару
+// access+refresh. Гашение через UPDATE ... RETURNING защищает от повторного использования refresh
+// при гонке: только один из конкурентных запросов затронет строку (revoked_at IS NULL) и получит
+// client_id; остальные вернут ok=false. Возвращает ok=false для недействительного/истёкшего/уже
+// использованного refresh — без выдачи новой пары.
+func (r *AuthRepository) RotateSession(ctx context.Context, oldRefreshHash, newAccessHash, newRefreshHash string, now, accessExpiresAt, refreshExpiresAt time.Time) (bool, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin rotate session: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var clientID string
+	err = tx.QueryRow(ctx, `
+UPDATE refresh_tokens
+SET revoked_at = $2
+WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2
+RETURNING client_id::text`, oldRefreshHash, now).Scan(&clientID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("consume refresh token: %w", err)
+	}
+
+	var sessionID string
+	if err := tx.QueryRow(ctx, `
+INSERT INTO auth_sessions (client_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id::text`, clientID, newAccessHash, accessExpiresAt).Scan(&sessionID); err != nil {
+		return false, fmt.Errorf("insert rotated session: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO refresh_tokens (client_id, session_id, token_hash, expires_at)
+VALUES ($1, $2, $3, $4)`, clientID, sessionID, newRefreshHash, refreshExpiresAt); err != nil {
+		return false, fmt.Errorf("insert rotated refresh token: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit rotate session: %w", err)
+	}
+	return true, nil
+}
+
+// RevokeSessionByAccessToken завершает ТЕКУЩУЮ сессию по её access-токену: гасит саму сессию и
+// только связанные с ней refresh-токены (не трогая другие устройства клиента) — одна транзакция.
+// Возвращает found=false, если живой сессии с таким токеном нет.
+func (r *AuthRepository) RevokeSessionByAccessToken(ctx context.Context, accessHash string, now time.Time) (bool, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin revoke session: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var sessionID string
+	err = tx.QueryRow(ctx, `
 UPDATE auth_sessions
 SET revoked_at = $2
-WHERE token_hash = $1 AND revoked_at IS NULL`, tokenHash, now)
-	if err != nil {
-		return fmt.Errorf("revoke session: %w", err)
-	}
-	return nil
-}
-
-// SessionClientID возвращает client_id живой (не отозванной, не истёкшей) access-сессии по хешу.
-func (r *AuthRepository) SessionClientID(ctx context.Context, tokenHash string) (string, bool, error) {
-	var clientID string
-	err := r.db.QueryRow(ctx, `
-SELECT client_id::text
-FROM auth_sessions
-WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()`, tokenHash).Scan(&clientID)
+WHERE token_hash = $1 AND revoked_at IS NULL
+RETURNING id::text`, accessHash, now).Scan(&sessionID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
+		return false, nil
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("query session client: %w", err)
+		return false, fmt.Errorf("revoke session: %w", err)
 	}
-	return clientID, true, nil
-}
-
-func (r *AuthRepository) CreateRefreshToken(ctx context.Context, clientID, tokenHash string, expiresAt time.Time) error {
-	_, err := r.db.Exec(ctx, `
-INSERT INTO refresh_tokens (client_id, token_hash, expires_at)
-VALUES ($1, $2, $3)`, clientID, tokenHash, expiresAt)
-	if err != nil {
-		return fmt.Errorf("create refresh token: %w", err)
-	}
-	return nil
-}
-
-// RefreshTokenClientID возвращает client_id действительного refresh-токена по хешу
-// (не отозван, не истёк на момент now).
-func (r *AuthRepository) RefreshTokenClientID(ctx context.Context, tokenHash string, now time.Time) (string, bool, error) {
-	var clientID string
-	err := r.db.QueryRow(ctx, `
-SELECT client_id::text
-FROM refresh_tokens
-WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2`, tokenHash, now).Scan(&clientID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, fmt.Errorf("query refresh token: %w", err)
-	}
-	return clientID, true, nil
-}
-
-func (r *AuthRepository) RevokeRefreshToken(ctx context.Context, tokenHash string, now time.Time) error {
-	_, err := r.db.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 UPDATE refresh_tokens
 SET revoked_at = $2
-WHERE token_hash = $1 AND revoked_at IS NULL`, tokenHash, now)
-	if err != nil {
-		return fmt.Errorf("revoke refresh token: %w", err)
+WHERE session_id = $1 AND revoked_at IS NULL`, sessionID, now); err != nil {
+		return false, fmt.Errorf("revoke session refresh tokens: %w", err)
 	}
-	return nil
-}
-
-func (r *AuthRepository) RevokeClientRefreshTokens(ctx context.Context, clientID string, now time.Time) error {
-	_, err := r.db.Exec(ctx, `
-UPDATE refresh_tokens
-SET revoked_at = $2
-WHERE client_id = $1 AND revoked_at IS NULL`, clientID, now)
-	if err != nil {
-		return fmt.Errorf("revoke client refresh tokens: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit revoke session: %w", err)
 	}
-	return nil
+	return true, nil
 }

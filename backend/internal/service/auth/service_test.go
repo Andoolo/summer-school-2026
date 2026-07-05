@@ -108,20 +108,14 @@ func (r *fakeRepo) CreateClient(context.Context, string, time.Time) (Client, err
 	return Client{ID: "00000000-0000-0000-0000-000000000000", Phone: "+79991234567"}, nil
 }
 
-func (r *fakeRepo) CreateSession(context.Context, string, string, time.Time) error { return nil }
-
-func (r *fakeRepo) RevokeSession(context.Context, string, time.Time) error { return nil }
-
-func (r *fakeRepo) SessionClientID(context.Context, string) (string, bool, error) {
-	return "", false, nil
+func (r *fakeRepo) IssueSession(context.Context, string, string, string, time.Time, time.Time) error {
+	return nil
 }
 
-func (r *fakeRepo) CreateRefreshToken(context.Context, string, string, time.Time) error { return nil }
-
-func (r *fakeRepo) RefreshTokenClientID(context.Context, string, time.Time) (string, bool, error) {
-	return "", false, nil
+func (r *fakeRepo) RotateSession(context.Context, string, string, string, time.Time, time.Time, time.Time) (bool, error) {
+	return false, nil
 }
 
-func (r *fakeRepo) RevokeRefreshToken(context.Context, string, time.Time) error { return nil }
-
-func (r *fakeRepo) RevokeClientRefreshTokens(context.Context, string, time.Time) error { return nil }
+func (r *fakeRepo) RevokeSessionByAccessToken(context.Context, string, time.Time) (bool, error) {
+	return false, nil
+}

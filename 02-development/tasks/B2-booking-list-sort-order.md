@@ -129,6 +129,14 @@ ORDER BY
 - Среда: Docker Desktop (Postgres 16, порт хоста `15432`) + `psql` в контейнере `backend-db-1`.
 - Проверка: SQL-прогон OLD / GLM-fix / IMPROVED на смешанных данных в транзакции с откатом.
 
+## Правки по ревью (M3)
+
+Граница «предстоящие/прошедшие» переведена с SQL `NOW()` на параметр `$now` из инъектируемых часов
+(`BookingRepository.now`, дефолт `time.Now`) — сортировка стала тестируемой и с явным моментом
+времени. Полная стабильность порядка **между страницами** пагинации (когда бронь пересекает границу
+`now` между запросами) требует клиентского anchor-времени или курсорной пагинации — отмечено как
+follow-up, вне текущего скоупа. См. `02-development/REVIEW-block2.md`.
+
 ## Файлы
 
-- `backend/internal/storage/postgres/bookings.go` — `ORDER BY` в `BookingRepository.List`.
+- `backend/internal/storage/postgres/bookings.go` — двунаправленный `ORDER BY` + параметр `$now` в `List`.

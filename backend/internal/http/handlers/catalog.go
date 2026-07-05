@@ -177,6 +177,22 @@ type slotBaseDTO struct {
 	instructor slotsapi.Instructor
 }
 
+// isJSONString сообщает, что сырой jsonb — это JSON-строка (первый значащий байт — кавычка),
+// а не массив/объект. Используется, чтобы отличить encoded-polyline от массива координат.
+func isJSONString(raw []byte) bool {
+	for _, b := range raw {
+		switch b {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '"':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 func slotBase(slot postgres.Slot) (slotBaseDTO, error) {
 	slotID, err := uuid.Parse(slot.ID)
 	if err != nil {
@@ -198,15 +214,26 @@ func slotBase(slot postgres.Slot) (slotBaseDTO, error) {
 		DurationMin: slot.RouteDurationMin,
 	}
 	// geometry — обязательное поле Route по контракту (маршрут для карты, SCR-003).
-	// В БД хранится как jsonb-массив координат [[lat,lng],...]; кладём в union-вариант Geometry0.
+	// По контракту это oneOf: массив координат [[lat,lng],...] ИЛИ строка (encoded polyline).
+	// Различаем форму jsonb, чтобы строка не роняла всю выдачу /slots в 500.
 	if len(slot.RouteGeometry) > 0 {
-		var coords [][]float32
-		if err := json.Unmarshal(slot.RouteGeometry, &coords); err != nil {
-			return slotBaseDTO{}, fmt.Errorf("decode route geometry: %w", err)
-		}
 		var geometry slotsapi.Geometry
-		if err := geometry.FromGeometry0(coords); err != nil {
-			return slotBaseDTO{}, fmt.Errorf("encode route geometry: %w", err)
+		if isJSONString(slot.RouteGeometry) {
+			var polyline string
+			if err := json.Unmarshal(slot.RouteGeometry, &polyline); err != nil {
+				return slotBaseDTO{}, fmt.Errorf("decode route geometry (polyline): %w", err)
+			}
+			if err := geometry.FromGeometry1(polyline); err != nil {
+				return slotBaseDTO{}, fmt.Errorf("encode route geometry (polyline): %w", err)
+			}
+		} else {
+			var coords [][]float32
+			if err := json.Unmarshal(slot.RouteGeometry, &coords); err != nil {
+				return slotBaseDTO{}, fmt.Errorf("decode route geometry (coords): %w", err)
+			}
+			if err := geometry.FromGeometry0(coords); err != nil {
+				return slotBaseDTO{}, fmt.Errorf("encode route geometry (coords): %w", err)
+			}
 		}
 		route.Geometry = &geometry
 	}

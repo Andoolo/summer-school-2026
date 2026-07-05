@@ -20,8 +20,10 @@ access в `Authorization`, долгоживущий refresh — только д�
 - verify-code теперь возвращает **супермножество**: прежний `token` (обратная совместимость с
   клиентом, который читает одиночный токен) **плюс** `tokens: { access_token, refresh_token }`
   (форма `TokenPair` из контракта);
-- добавлен `POST /auth/refresh` — обмен refresh на новую пару с **ротацией** (старый refresh гасится);
-- `logout` теперь инвалидирует и access-сессию, и **все refresh-токены** клиента (R-016).
+- добавлен `POST /auth/refresh` — обмен refresh на новую пару с **атомарной ротацией** (старый
+  refresh гасится в одной транзакции через `UPDATE ... RETURNING` — защита от reuse при гонке);
+- `logout` инвалидирует access-сессию и refresh-токены **только текущей сессии** (по `session_id`,
+  не трогая другие устройства клиента), R-016.
 
 **Осознанные отклонения (задокументированы намеренно):**
 - Токены — **непрозрачные** (случайные, хранятся как SHA-256 хеш), а не JWT, как в тексте
@@ -103,8 +105,24 @@ access в `Authorization`, долгоживущий refresh — только д�
 ## Файлы
 
 - `backend/migrations/00003_refresh_tokens.sql` — таблица refresh_tokens.
-- `backend/internal/storage/postgres/auth.go` — 5 методов refresh/session.
-- `backend/internal/service/auth/service.go` — refreshTTL, выдача refresh, `Refresh`, revoke в logout.
-- `backend/internal/http/handlers/auth.go` — DTO ответа + handler `Refresh`.
+- `backend/migrations/00004_refresh_token_session.sql` — связь `session_id` (для logout по сессии).
+- `backend/internal/storage/postgres/auth.go` — транзакционные `IssueSession`/`RotateSession`/`RevokeSessionByAccessToken`.
+- `backend/internal/service/auth/service.go` — refreshTTL, выдача пары, `Refresh` (атомарная ротация), logout по сессии, `AccessTTLSeconds`.
+- `backend/internal/http/handlers/auth.go` — DTO ответа (`token_type`/`expires_in`) + handler `Refresh`.
 - `backend/internal/http/router.go`, `backend/cmd/api/main.go` — маршрут `/auth/refresh`.
 - `backend/internal/service/auth/service_test.go` — стабы новых методов в `fakeRepo`.
+
+## Правки по ревью (см. `02-development/REVIEW-block2.md`)
+
+- **H1 (безопасность):** ротация атомарна — `RotateSession` гасит предъявленный refresh через
+  `UPDATE ... WHERE revoked_at IS NULL RETURNING client_id` в транзакции; повторное использование
+  (в т.ч. при гонке) → 401.
+- **H2 (контракт):** refresh связан с сессией (`session_id`, миграция 00004); `logout` гасит только
+  refresh текущей сессии — другие устройства клиента продолжают работать.
+- **M1 (контракт):** `TokenPair` дополнен `token_type:"Bearer"` и `expires_in` (срок жизни access).
+- **L2:** ротация/logout/issue — в транзакциях (частичный сбой откатывается).
+- Проверено live: `token_type=Bearer, expires_in=86400`; logout A → refreshA 401, refreshB (устройство B) 200; reuse refresh → 401.
+
+> **Ограничение:** ротация создаёт новую сессию, не связанную «семьёй» со старой. Logout по
+> устаревшему (до-ротационному) access-токену не гасит ротированного потомка; в нормальном потоке
+> клиент логаутится текущим токеном — тогда корректно. Token-family — отдельная задача.

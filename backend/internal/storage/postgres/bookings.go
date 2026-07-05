@@ -15,11 +15,12 @@ import (
 )
 
 type BookingRepository struct {
-	db *pgxpool.Pool
+	db  *pgxpool.Pool
+	now func() time.Time
 }
 
 func NewBookingRepository(db *pgxpool.Pool) *BookingRepository {
-	return &BookingRepository{db: db}
+	return &BookingRepository{db: db, now: time.Now}
 }
 
 func (r *BookingRepository) ClientBySessionTokenHash(ctx context.Context, tokenHash string) (booking.Client, bool, error) {
@@ -162,7 +163,11 @@ func (r *BookingRepository) List(ctx context.Context, clientID string, command b
 		return booking.BookingList{}, fmt.Errorf("count bookings: %w", err)
 	}
 
-	queryArgs := append(args, command.Limit, command.Offset)
+	// Граница «предстоящие/прошедшие» — через параметр $now (инъектируемые часы), а не SQL NOW():
+	// делает порядок тестируемым и явным. (Полная стабильность между страницами пагинации требует
+	// клиентского anchor-времени/курсорной пагинации — вне текущего скоупа.)
+	nowIdx := len(args) + 1
+	queryArgs := append(args, r.now().UTC(), command.Limit, command.Offset)
 	// Двунаправленная сортировка под пагинацию (SCR-005, AC-002/AC-003):
 	//   1) предстоящие (start_at >= now) идут раньше прошедших;
 	//   2) внутри предстоящих — по возрастанию start_at (ближайшая прогулка первой, AC-002);
@@ -171,11 +176,11 @@ func (r *BookingRepository) List(ctx context.Context, clientID string, command b
 	// бронями, ближайшая предстоящая не попадала в первый экран ленивой загрузки (R-025).
 	rows, err := r.db.Query(ctx, bookingSelectSQL()+`
 `+where+`
-ORDER BY (CASE WHEN s.start_at >= NOW() THEN 0 ELSE 1 END),
-         CASE WHEN s.start_at >= NOW() THEN s.start_at END ASC,
+ORDER BY (CASE WHEN s.start_at >= $`+fmt.Sprint(nowIdx)+` THEN 0 ELSE 1 END),
+         CASE WHEN s.start_at >= $`+fmt.Sprint(nowIdx)+` THEN s.start_at END ASC,
          s.start_at DESC,
          b.created_at DESC
-LIMIT $`+fmt.Sprint(len(args)+1)+` OFFSET $`+fmt.Sprint(len(args)+2), queryArgs...)
+LIMIT $`+fmt.Sprint(nowIdx+1)+` OFFSET $`+fmt.Sprint(nowIdx+2), queryArgs...)
 	if err != nil {
 		return booking.BookingList{}, fmt.Errorf("query bookings: %w", err)
 	}

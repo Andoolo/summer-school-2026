@@ -89,6 +89,8 @@ func (h *AuthHandler) VerifyAuthCode(w http.ResponseWriter, r *http.Request) {
 		Tokens: tokenPairDTO{
 			AccessToken:  result.Token,
 			RefreshToken: result.RefreshToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    result.AccessTTLSeconds,
 		},
 		Client: authapi.Client{
 			Id:        clientID,
@@ -125,13 +127,18 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteJSON(w, http.StatusOK, tokenPairDTO{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    result.AccessTTLSeconds,
 	})
 }
 
-// tokenPairDTO повторяет схему TokenPair контракта (access_token + refresh_token).
+// tokenPairDTO повторяет схему TokenPair контракта
+// (access_token + refresh_token + token_type + expires_in — все required).
 type tokenPairDTO struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 // verifyCodeResponseDTO — ответ verify-code: одиночный token (обратная совместимость) + tokens.
