@@ -75,7 +75,14 @@ cd client
 - Среда: Kotlin 2.2.20 / Compose Multiplatform (common → wasm/android/ios).
 - Проверка: статическая выверка API + визуальная проверка сборкой wasmJs.
 
+## Правки по ревью (L3)
+
+Тяжёлая часть проекции (cos-коррекция, bbox, аллокации) вынесена в `remember(routePoints)` через
+`prepareRoute()` — считается один раз, а не на каждый кадр Canvas; в отрисовке остаётся только
+дешёвое масштабирование `toCanvasPoints()` под текущий размер. Перекомпиляция wasmJs — BUILD
+SUCCESSFUL. См. `02-development/REVIEW-block2.md`.
+
 ## Файлы
 
 - `client/shared/src/commonMain/kotlin/com/volna/app/map/RouteMapPreviewFallback.kt` — отрисовка
-  реальной геометрии + `projectRoute()`; мок как fallback.
+  реальной геометрии (`prepareRoute` в `remember` + `toCanvasPoints`); мок как fallback.

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -94,6 +95,9 @@ private fun MockRouteScreenshot(
     routeColor: Color,
     pinColor: Color,
 ) {
+    // Дорогая часть проекции (cos-коррекция, bbox) считается один раз по routePoints, а не на
+    // каждый кадр Canvas; в отрисовке остаётся только дешёвое масштабирование под текущий размер.
+    val prepared = remember(routePoints) { prepareRoute(routePoints) }
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,13 +171,13 @@ private fun MockRouteScreenshot(
             )
         }
 
-        // Проекция реальной геометрии маршрута на канвас (F2).
-        val projected = projectRoute(
-            points = routePoints,
+        // Проекция реальной геометрии маршрута на канвас (F2): дешёвое масштабирование
+        // предрассчитанных точек под текущий размер Canvas.
+        val projected = prepared?.toCanvasPoints(
             width = size.width,
             height = size.height,
             padding = 28.dp.toPx(),
-        )
+        ).orEmpty()
         val routePath = if (projected.size >= 2) {
             androidx.compose.ui.graphics.Path().apply {
                 moveTo(projected.first().x, projected.first().y)
@@ -225,34 +229,41 @@ private fun MockRouteScreenshot(
 }
 
 /**
- * Проецирует географические координаты маршрута в точки канваса.
- *
- * - долгота корректируется на cos(широты), чтобы форма не растягивалась по горизонтали;
- * - единый масштаб по обеим осям (форма не искажается) + центрирование;
- * - ось Y инвертируется (север — вверху).
- *
- * Возвращает пустой список, если точек меньше двух.
+ * Предрассчитанная геометрия маршрута в плоских aspect-корректных координатах (x = lng·cos(lat),
+ * y = lat) и её bbox. Считается один раз (`remember` по routePoints) — не зависит от размера Canvas.
  */
-private fun projectRoute(
-    points: List<GeoPoint>,
-    width: Float,
-    height: Float,
-    padding: Float,
-): List<Offset> {
-    if (points.size < 2) return emptyList()
+private class PreparedRoute(
+    val points: List<Offset>,
+    val minX: Float,
+    val minY: Float,
+    val maxX: Float,
+    val maxY: Float,
+)
 
+/** Готовит проекцию маршрута; `null`, если точек меньше двух. */
+private fun prepareRoute(points: List<GeoPoint>): PreparedRoute? {
+    if (points.size < 2) return null
+
+    // Долгота корректируется на cos(средней широты), чтобы форма не растягивалась по горизонтали.
     val midLatRad = (points.sumOf { it.lat } / points.size) * (PI / 180.0)
     val cosLat = cos(midLatRad)
+    val corrected = points.map { Offset((it.lng * cosLat).toFloat(), it.lat.toFloat()) }
 
-    // Корректированные плоские координаты: x = lng*cos(lat), y = lat.
-    val xs = points.map { it.lng * cosLat }
-    val ys = points.map { it.lat }
-    val minX = xs.min()
-    val maxX = xs.max()
-    val minY = ys.min()
-    val maxY = ys.max()
+    return PreparedRoute(
+        points = corrected,
+        minX = corrected.minOf { it.x },
+        minY = corrected.minOf { it.y },
+        maxX = corrected.maxOf { it.x },
+        maxY = corrected.maxOf { it.y },
+    )
+}
 
-    val epsilon = 1e-9
+/**
+ * Масштабирует предрассчитанные точки под размер Canvas: единый масштаб по обеим осям (форма не
+ * искажается) + центрирование; ось Y инвертируется (север — вверху).
+ */
+private fun PreparedRoute.toCanvasPoints(width: Float, height: Float, padding: Float): List<Offset> {
+    val epsilon = 1e-6f
     val spanX = (maxX - minX).takeIf { it > epsilon } ?: epsilon
     val spanY = (maxY - minY).takeIf { it > epsilon } ?: epsilon
 
@@ -260,15 +271,15 @@ private fun projectRoute(
     val innerH = (height - 2 * padding).coerceAtLeast(1f)
 
     val scale = min(innerW / spanX, innerH / spanY)
-    val drawnW = (spanX * scale).toFloat()
-    val drawnH = (spanY * scale).toFloat()
+    val drawnW = spanX * scale
+    val drawnH = spanY * scale
     val offsetX = padding + (innerW - drawnW) / 2f
     val offsetY = padding + (innerH - drawnH) / 2f
 
     return points.map { p ->
-        val x = offsetX + ((p.lng * cosLat - minX) * scale).toFloat()
+        val x = offsetX + (p.x - minX) * scale
         // инверсия Y: большая широта (север) → меньший y (верх экрана)
-        val y = offsetY + ((maxY - p.lat) * scale).toFloat()
+        val y = offsetY + (maxY - p.y) * scale
         Offset(x, y)
     }
 }
