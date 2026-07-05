@@ -1,0 +1,200 @@
+# Общие модели API «Апекс»
+# Переиспользуемые схемы для всех доменов.
+
+components:
+  schemas:
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            Машинный код ошибки. Канон таксономии — ../../2-requirements/error-matrix.md.
+            Примеры: slot_full, double_booking,
+            slot_cancelled, slot_started, already_cancelled, invalid_code, unauthorized,
+            forbidden, not_found, rate_limited, server_error.
+        message:
+          type: string
+          description: Краткое человекочитаемое сообщение (локализация — на клиенте по code).
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            Доп. поля по коду (см. матрицу ошибок). Напр. для slot_full — available_seats и
+            available_rental_kits; для double_booking — booking_id; для rate_limited — retry_after.
+          properties:
+            available_seats:
+              type: integer
+              format: int32
+              minimum: 0
+            available_rental_kits:
+              type: integer
+              format: int32
+              minimum: 0
+            booking_id:
+              type: string
+              format: uuid
+            slot_id:
+              type: string
+              format: uuid
+            start_at:
+              type: string
+              format: date-time
+            retry_after:
+              type: integer
+              format: int32
+              description: Секунды до разрешённого повтора.
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+
+    Money:
+      type: object
+      description: Денежная сумма в RUB.
+      required: [amount, currency]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Сумма в копейках (RUB).
+          minimum: 0
+        currency:
+          type: string
+          enum: [RUB]
+          default: RUB
+
+    SlotStatus:
+      type: string
+      enum: [scheduled, cancelled]
+      description: Статус слота. `cancelled` — отменён центром/по погоде.
+
+    BookingStatus:
+      type: string
+      enum: [active, cancelled, late_cancel, club_cancelled]
+      description: |
+        Статус брони. active — действующая; cancelled — ранняя отмена (места вернулись);
+        late_cancel — поздняя отмена (<2 ч, места не вернулись); club_cancelled — «Отменён
+        центром» (слот снят центром, R-008).
+
+    TrackType:
+      type: string
+      enum: [novice, experienced]
+      description: Тип конфигурации трассы (новичковая / опытная).
+
+  parameters:
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    OffsetParam:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+        default: 0
+
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Клиентский ключ идемпотентности (R-022). Повтор запроса с тем же ключом и тем же телом
+        возвращает идентичный ответ без создания дубля. Повтор с тем же ключом, но другим телом —
+        ошибка.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+
+    Unauthorized:
+      description: Токен отсутствует/неверен/истёк.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unauthorized
+            message: Требуется вход
+
+    Forbidden:
+      description: Доступ запрещён (клиент видит только свои ресурсы, NFR-12).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: forbidden
+            message: Доступ запрещён
+
+    NotFound:
+      description: Ресурс не найден.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_found
+            message: Не найдено
+
+    RateLimited:
+      description: Превышен лимит запросов.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Секунды до разрешённого повтора.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: rate_limited
+            message: Слишком много попыток
+            details:
+              retry_after: 45
+
+    ServerError:
+      description: Внутренняя ошибка сервера.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: server_error
+            message: Что-то пошло не так. Попробуйте ещё раз.
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access-токен. При 401 клиент пытается refresh; при неуспехе — выход на SCR-001.
+        Токены хранятся в защищённом хранилище устройства (Keychain/Keystore).

@@ -1,0 +1,37 @@
+# Домен marshals — справочник маршалов для фильтра (read-only)
+# FR-38 (фильтр по маршалу), UC-3 A4 (пустой справочник → фильтр скрыт).
+
+paths:
+
+  /marshals:
+    get:
+      tags: [marshals]
+      operationId: listMarshals
+      summary: Справочник маршалов
+      description: |
+        Возвращает список маршалов для фильтра слотов. Если список пуст — клиент скрывает фильтр по
+        маршалу (UC-3 A4). Read-only.
+      responses:
+        '200':
+          description: Список маршалов (может быть пустым).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Marshal'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+components:
+
+  schemas:
+
+    Marshal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }

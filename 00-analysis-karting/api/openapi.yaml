@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: Apex Karting — Client API
+  version: 1.0.0
+  description: |
+    Клиентский контракт API мобильного приложения картинг-центра «Апекс» (роль «Клиент»):
+    авторизация по SMS OTP, профиль, слоты (read-only), брони (создание/список/отмена),
+    справочник маршалов.
+
+    **Сквозные правила:**
+    - Аутентификация: `Authorization: Bearer <access>` (bearerAuth), кроме запроса/проверки кода.
+    - Идемпотентность: `POST /bookings` требует `Idempotency-Key` (R-022).
+    - Ошибки: единая модель `Error` (code + details); канон — error-matrix.md.
+    - Время: ISO-8601 UTC; бизнес-правила — зона центра, отображение — зона устройства (R-021).
+    - Валюта: RUB (копейки, int64).
+    - Канал уведомлений MVP — системный push (напоминания за 24ч и 2ч до старта).
+
+    **Секреты (ключи Яндекс.Карт, APNs/FCM, SMS-провайдер) НЕ описываются в контракте** —
+    это параметры окружения.
+  contact:
+    name: Apex Karting (учебный проект ЛШ Surf)
+servers:
+  - url: https://api.apex-karting.example/v1
+    description: Production-like (учебный стенд)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Авторизация по SMS OTP, refresh, logout
+  - name: profile
+    description: Профиль клиента, смена телефона, удаление аккаунта
+  - name: slots
+    description: Список/фильтрация и карточка слотов (read-only)
+  - name: bookings
+    description: Создание, список, отмена броней
+  - name: marshals
+    description: Справочник маршалов для фильтра (read-only)
+
+paths:
+  # auth
+  /auth/code:
+    $ref: './auth/api.yaml#/paths/~1auth~1code'
+  /auth/verify:
+    $ref: './auth/api.yaml#/paths/~1auth~1verify'
+  /auth/refresh:
+    $ref: './auth/api.yaml#/paths/~1auth~1refresh'
+  /auth/logout:
+    $ref: './auth/api.yaml#/paths/~1auth~1logout'
+
+  # profile
+  /me:
+    $ref: './profile/api.yaml#/paths/~1me'
+  /me/phone:
+    $ref: './profile/api.yaml#/paths/~1me~1phone'
+
+  # slots
+  /slots:
+    $ref: './slots/api.yaml#/paths/~1slots'
+  /slots/{slotId}:
+    $ref: './slots/api.yaml#/paths/~1slots~1{slotId}'
+
+  # bookings
+  /bookings:
+    $ref: './bookings/api.yaml#/paths/~1bookings'
+  /bookings/{bookingId}/cancel:
+    $ref: './bookings/api.yaml#/paths/~1bookings~1{bookingId}~1cancel'
+
+  # marshals
+  /marshals:
+    $ref: './marshals/api.yaml#/paths/~1marshals'
+
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: './common/models.yaml#/components/securitySchemes/bearerAuth'
+  parameters:
+    LimitParam:
+      $ref: './common/models.yaml#/components/parameters/LimitParam'
+    OffsetParam:
+      $ref: './common/models.yaml#/components/parameters/OffsetParam'
+  responses:
+    Unauthorized:
+      $ref: './common/models.yaml#/components/responses/Unauthorized'
+    Forbidden:
+      $ref: './common/models.yaml#/components/responses/Forbidden'
+    NotFound:
+      $ref: './common/models.yaml#/components/responses/NotFound'
+    RateLimited:
+      $ref: './common/models.yaml#/components/responses/RateLimited'
+    ServerError:
+      $ref: './common/models.yaml#/components/responses/ServerError'

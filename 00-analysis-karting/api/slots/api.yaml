@@ -1,0 +1,163 @@
+# Домен slots — список/фильтрация и карточка слота (read-only)
+# FR-9, FR-9a, FR-38, FR-44, UC-3. Слоты приходят из существующего бэкенда.
+
+paths:
+
+  /slots:
+    get:
+      tags: [slots]
+      operationId: listSlots
+      summary: Список слотов (с фильтрами)
+      description: |
+        Возвращает слоты на ближайшие 7 дней по умолчанию (R-027: `date_from=now`,
+        `date_to=now+7д`). Заполненные (`free_seats=0`) и отменённые не скрываются. Сортировка —
+        по `start_at` по возрастанию. Семантика фильтров: внутри группы (`route_type`,
+        `marshal_id`) — ИЛИ; между группами — И; границы дат включительные, локальная зона (FR-38).
+      parameters:
+        - name: date_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: route_type
+          in: query
+          description: Множественный выбор (ИЛИ). `novice`/`experienced`.
+          schema: { type: array, items: { type: string, enum: [novice, experienced] } }
+          style: form
+          explode: true
+        - name: marshal_id
+          in: query
+          description: Множественный выбор (ИЛИ).
+          schema: { type: array, items: { type: string, format: uuid } }
+          style: form
+          explode: true
+        - name: only_available
+          in: query
+          description: Только слоты со свободными местами (по умолчанию false).
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Список слотов.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotList'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+  /slots/{slotId}:
+    get:
+      tags: [slots]
+      operationId: getSlot
+      summary: Карточка слота
+      parameters:
+        - $ref: '#/components/parameters/SlotIdPath'
+      responses:
+        '200':
+          description: Карточка слота (с описанием конфигурации, картой/местом сбора).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotCard'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../common/models.yaml#/components/responses/NotFound'
+
+components:
+
+  parameters:
+    SlotIdPath:
+      name: slotId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+
+    SlotBrief:
+      type: object
+      description: Краткая проекция слота (для списка и внутри Booking).
+      properties:
+        id: { type: string, format: uuid }
+        start_at: { type: string, format: date-time }
+        track_config:
+          $ref: '#/components/schemas/TrackConfigBrief'
+        marshal:
+          allOf:
+            - $ref: '../marshals/models.yaml#/components/schemas/Marshal'
+          nullable: true
+          description: Может быть null, если маршал ещё не назначен.
+        free_seats: { type: integer, format: int32, minimum: 0 }
+        total_seats: { type: integer, format: int32, minimum: 0 }
+        free_rental_kits: { type: integer, format: int32, minimum: 0 }
+        status:
+          $ref: '../common/models.yaml#/components/schemas/SlotStatus'
+
+    SlotListItem:
+      allOf:
+        - $ref: '#/components/schemas/SlotBrief'
+        - type: object
+          properties:
+            price:
+              $ref: '../common/models.yaml#/components/schemas/Money'
+            max_seats:
+              type: integer
+              format: int32
+              minimum: 0
+              description: |
+                Серверный лимит мест для одной брони на этот слот:
+                `min(free_seats, track_config.capacity_cap, 3)` (FR-13). Клиент использует как
+                есть, не пересчитывает.
+
+    SlotList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotListItem'
+
+    SlotCard:
+      allOf:
+        - $ref: '#/components/schemas/SlotListItem'
+        - type: object
+          properties:
+            rental_price:
+              allOf:
+                - $ref: '../common/models.yaml#/components/schemas/Money'
+              description: Отдельный тариф проката одного комплекта экипировки.
+            meeting_point:
+              type: string
+              description: Место сбора (адрес/ориентир) — обязательно (FR-44).
+            meeting_point_lat: { type: number, format: float }
+            meeting_point_lng: { type: number, format: float }
+            track_config:
+              $ref: '#/components/schemas/TrackConfig'
+
+    TrackConfigBrief:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type:
+          $ref: '../common/models.yaml#/components/schemas/TrackType'
+
+    TrackConfig:
+      allOf:
+        - $ref: '#/components/schemas/TrackConfigBrief'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            capacity_cap: { type: integer, format: int32 }
+            duration_min: { type: integer, format: int32 }
+            geometry:
+              type: string
+              description: |
+                Геометрия трассы — encoded polyline либо JSON-массив `[lat,lng]`. Рисуется линией на
+                карте Яндекс (BS-004). Обязательное поле (RR-D07).

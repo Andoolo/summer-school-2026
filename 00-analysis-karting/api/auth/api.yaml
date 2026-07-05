@@ -1,0 +1,152 @@
+# Домен auth — вход по SMS OTP, refresh, logout
+# FR-1, FR-2, FR-43, UC-4, US-1, US-16. Антифрод — NFR-19.
+
+paths:
+
+  /auth/code:
+    post:
+      tags: [auth]
+      operationId: requestCode
+      summary: Запросить SMS-код
+      description: |
+        Отправляет одноразовый код в SMS на указанный номер (UC-4 шаги 1–3). Rate-limited
+        (NFR-19): ~1 запрос/30–60 с, ~5/час на номер/устройство. Код имеет конечный TTL. Не
+        требует авторизации.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCodeRequest'
+      responses:
+        '200':
+          description: Код отправлен (или молча, если номер невалиден — антиперечисление).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCodeResponse'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+  /auth/verify:
+    post:
+      tags: [auth]
+      operationId: verifyCode
+      summary: Проверить код и войти
+      description: |
+        Проверяет одноразовый код (UC-4 шаги 4–6). При успехе выдаёт пару токенов (access/refresh,
+        NFR-18) и флаг `is_new` — для нового клиента нужно запросить имя (FR-1). Число попыток
+        ограничено (≤5 до блокировки, NFR-19).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequest'
+      responses:
+        '200':
+          description: Успешный вход; токены + флаг нового клиента.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '400':
+          description: Неверный код (`invalid_code`); поле OTP остаётся активным.
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+              example:
+                code: invalid_code
+                message: Неверный код
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshToken
+      summary: Обновить access-токен
+      description: |
+        Обновляет access по refresh без участия пользователя (NFR-18). При истечении/отзыве refresh
+        — 401, клиент очищает токены и уходит на SCR-001.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Новая пара токенов.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Выйти (отозвать сессию)
+      description: Отзывает токены на стороне бэкенда (FR-49). Клиент также очищает локальное
+        хранилище.
+      responses:
+        '204':
+          description: Сессия закрыта.
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+components:
+
+  schemas:
+
+    RequestCodeRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: Номер телефона в формате E.164 (нормализация на сервере).
+
+    RequestCodeResponse:
+      type: object
+      properties:
+        resend_available_in:
+          type: integer
+          format: int32
+          description: Секунды до возможности повторного запроса кода (антифрод, NFR-19).
+
+    VerifyCodeRequest:
+      type: object
+      required: [phone, code]
+      properties:
+        phone: { type: string }
+        code: { type: string, minLength: 4, maxLength: 8 }
+
+    AuthSession:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in:
+          type: integer
+          format: int32
+          description: Срок жизни access в секундах (~15 мин, NFR-18).
+        is_new:
+          type: boolean
+          description: true для нового клиента — нужно запросить имя (FR-1, UC-4 шаг 6).
+        client:
+          $ref: '../profile/api.yaml#/components/schemas/Client'

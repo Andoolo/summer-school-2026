@@ -1,0 +1,241 @@
+# Домен bookings — создание/список/отмена броней
+# UC-1 (запись), UC-2 (отмена), FR-10–18, FR-35a, FR-45, FR-46.
+
+paths:
+
+  /bookings:
+    post:
+      tags: [bookings]
+      operationId: createBooking
+      summary: Создать бронь (идемпотентно)
+      description: |
+        Создаёт бронь клиента на слот (UC-1). Атомарная проверка свободных мест-картов и прокатной
+        экипировки, фиксация цены — на стороне бэкенда (NFR-8/9). Сервер — источник истины по
+        `price_total` (FR-45). Требует заголовок `Idempotency-Key` (R-022): повтор с тем же ключом
+        и телом возвращает идентичный ответ без дубля; повтор с тем же ключом, но другим телом —
+        ошибка `invalid_request`.
+      parameters:
+        - $ref: '../common/models.yaml#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+            example:
+              slot_id: "f3b1...-...-..."
+              seats_count: 2
+              rental_count: 1
+      responses:
+        '201':
+          description: Бронь создана.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: Невалидное тело запроса (напр. rental_count > seats_count).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '409':
+          description: |
+            Конфликт. Коды: `slot_full` (нет мест-картов/экипировки; в details —
+            `available_seats`, `available_rental_kits`), `double_booking` (бронь уже есть;
+            в details — `booking_id`).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+              examples:
+                slot_full:
+                  value:
+                    code: slot_full
+                    message: Недостаточно мест
+                    details:
+                      available_seats: 0
+                      available_rental_kits: 3
+                double_booking:
+                  value:
+                    code: double_booking
+                    message: У вас уже есть бронь на этот заезд
+                    details:
+                      booking_id: "b9c2...-...-..."
+        '410':
+          description: Слот отменён центром (`slot_cancelled`).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '422':
+          description: Слот уже стартовал (`slot_started`).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+    get:
+      tags: [bookings]
+      operationId: listBookings
+      summary: Список броней клиента (вся история, с пагинацией)
+      description: |
+        Возвращает ВСЮ историю броней клиента (FR-35a): активные, отменённые, поздние отмены
+        (`late_cancel`), отменённые центром (`club_cancelled`), прошедшие. Сортировка — по
+        `slot.start_at`. Разбиение на «предстоящие/прошедшие» клиент делает сам. Клиент видит
+        только свои брони (NFR-12).
+      parameters:
+        - $ref: '../common/models.yaml#/components/parameters/LimitParam'
+        - $ref: '../common/models.yaml#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Список броней.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingList'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+  /bookings/{bookingId}/cancel:
+    post:
+      tags: [bookings]
+      operationId: cancelBooking
+      summary: Отменить бронь (целиком)
+      description: |
+        Отмена брони (UC-2). Только целиком — отменяется вся бронь со всеми местами-картами и
+        прокатной экипировкой (R-014). **Тип отмены определяет сервер** по `slot.start_at` (граница
+        2 ч — зона центра, R-021): `≥ 2 ч` → `cancelled` (места/экипировка возвращаются),
+        `< 2 ч` → `late_cancel` (не возвращаются, без штрафа). Без тела.
+      parameters:
+        - $ref: '#/components/parameters/BookingIdPath'
+      responses:
+        '200':
+          description: Бронь отменена; новый статус в ответе.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../common/models.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../common/models.yaml#/components/responses/NotFound'
+        '409':
+          description: Повторная отмена (`already_cancelled`) — терминальный статус (UC-2 E2).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+              example:
+                code: already_cancelled
+                message: Бронь уже отменена
+        '422':
+          description: Заезд уже стартовал (`slot_started`) — отмена недоступна (UC-2 E1).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '5xx':
+          $ref: '../common/models.yaml#/components/responses/ServerError'
+
+components:
+
+  parameters:
+    BookingIdPath:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    CreateBookingRequest:
+      type: object
+      required: [slot_id, seats_count]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
+        seats_count:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 3
+          description: Число мест-картов (клиент + до 2 гостей, FR-12).
+        rental_count:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 3
+          default: 0
+          description: |
+            Число мест с прокатной экипировкой (0..seats_count). «Своя экипировка» не занимает
+            прокатный фонд. Лимиты проверяются раздельно: seats_count ≤ max_seats (FR-13),
+            rental_count ≤ free_rental_kits (FR-14).
+
+    Booking:
+      type: object
+      required: [id, slot_id, status, seats_count, rental_count, price_total, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        slot:
+          $ref: '../slots/api.yaml#/components/schemas/SlotBrief'
+          description: Краткая проекция слота для отображения в списке/деталях.
+        status:
+          $ref: '../common/models.yaml#/components/schemas/BookingStatus'
+        seats_count:
+          type: integer
+          format: int32
+        rental_count:
+          type: integer
+          format: int32
+        price_total:
+          allOf:
+            - $ref: '../common/models.yaml#/components/schemas/Money'
+          description: |
+            Итоговая цена, рассчитанная сервером (read-only). `price × seats_count + rental_price ×
+            rental_count`, RUB. Фиксируется на момент брони (R-005, R-010). Клиент не пересчитывает.
+        created_at:
+          type: string
+          format: date-time
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_reason:
+          type: string
+          nullable: true
+          description: Причина отмены (только для `club_cancelled`; R-008).
+
+    BookingList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+          format: int64
+          description: Общее число броней клиента (для пагинации).

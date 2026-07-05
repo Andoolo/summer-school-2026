@@ -1,0 +1,131 @@
+# Домен profile — профиль клиента, смена телефона, удаление аккаунта
+# FR-47, FR-48, FR-49 (logout в auth), UC-5, US-18.
+
+paths:
+
+  /me:
+    get:
+      tags: [profile]
+      operationId: getMe
+      summary: Профиль клиента
+      responses:
+        '200':
+          description: Профиль.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+    patch:
+      tags: [profile]
+      operationId: updateMe
+      summary: Редактировать имя
+      description: Обновляет имя клиента. Смена телефона — отдельным эндпоинтом `/me/phone` с OTP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Обновлённый профиль.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+    delete:
+      tags: [profile]
+      operationId: deleteAccount
+      summary: Удалить аккаунт
+      description: |
+        Удаление аккаунта (FR-48, R-009). Активные брони аннулируются и освобождают места-карты и
+        прокатные комплекты; прошедшие брони анонимизируются и сохраняются для учёта; ПДн клиента
+        анонимизируются; номер телефона освобождается для повторной регистрации.
+      responses:
+        '204':
+          description: Аккаунт удалён (анонимизирован); сессия отозвана.
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+  /me/phone:
+    post:
+      tags: [profile]
+      operationId: requestPhoneChange
+      summary: Запросить SMS-код для смены телефона
+      description: |
+        Запрашивает OTP на НОВЫЙ номер при смене телефона (UC-4 A2). После проверки нового кода
+        вызывается `confirmPhoneChange`. Rate-limited (NFR-19).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_phone]
+              properties:
+                new_phone: { type: string, description: E.164 }
+      responses:
+        '200':
+          description: Код отправлен на новый номер.
+          content:
+            application/json:
+              schema:
+                $ref: '../auth/api.yaml#/components/schemas/RequestCodeResponse'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+
+    patch:
+      tags: [profile]
+      operationId: confirmPhoneChange
+      summary: Подтвердить смену телефона кодом
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_phone, code]
+              properties:
+                new_phone: { type: string }
+                code: { type: string }
+      responses:
+        '200':
+          description: Телефон изменён.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          description: Неверный код (`invalid_code`).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+
+components:
+
+  schemas:
+
+    Client:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        phone:
+          type: string
+          description: |
+            Телефон клиента. В API возвращается по необходимости; в UI маскируется
+            (`+7 *** *** ** 67`, NFR-20).
+        created_at: { type: string, format: date-time }
