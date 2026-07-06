@@ -1,0 +1,226 @@
+# Машиночитаемые тест-кейсы «Апекс» (Столп 2). Зеркало core-flows.md для TMS/автоматизации.
+# Поля: id, title, priority(P0..P2), type(component|scenario), component, labels[], regress,
+# preconditions, steps[], expected[], refs[], status, needs_clarification.
+meta:
+  project: volna
+  suite: core-flows
+  source: 03-testing/test-cases/core-flows.md
+  format_version: 1
+
+cases:
+  # ---- AUTH ----
+  - id: TC-AUTH-02
+    title: OTP-код не возвращается в production, возвращается в dev
+    priority: P0
+    type: scenario
+    component: auth
+    labels: [security, otp, regression]
+    regress: B1
+    preconditions:
+      - "API запущен в двух окружениях: APP_ENV=production и APP_ENV=development"
+    steps:
+      - "POST /auth/request-code {phone:+79990000001} на dev"
+      - "POST /auth/request-code {phone:+79990000002} на production"
+    expected:
+      - "dev: тело ответа содержит поле code"
+      - "production: поле code ОТСУТСТВУЕТ в ответе"
+    refs: [FR-43, NFR-19, NFR-20, 02-development/tasks/B1-otp-code-leak.md]
+    status: verified
+
+  - id: TC-AUTH-06
+    title: Verify возвращает пару токенов с token_type и expires_in
+    priority: P0
+    type: component
+    component: auth
+    labels: [session, token-pair, regression]
+    regress: F3
+    preconditions: ["Запрошен и получен валидный OTP"]
+    steps: ["POST /auth/verify-code {phone, code}"]
+    expected:
+      - "200"
+      - "тело содержит token (совместимость)"
+      - "tokens.access_token, tokens.refresh_token присутствуют"
+      - "tokens.token_type == Bearer"
+      - "tokens.expires_in > 0"
+      - "client, is_new присутствуют"
+    refs: [TokenPair, R-016, 02-development/tasks/F3-auth-refresh.md]
+    status: verified
+
+  - id: TC-AUTH-07
+    title: Ротация refresh — старый refresh после обмена недействителен
+    priority: P0
+    type: scenario
+    component: auth
+    labels: [security, refresh, rotation, regression]
+    regress: F3
+    preconditions: ["Есть валидная пара токенов"]
+    steps:
+      - "POST /auth/refresh {refresh_token} -> получить новую пару"
+      - "POST /auth/refresh со СТАРЫМ refresh_token"
+    expected:
+      - "первый вызов: 200, новая пара"
+      - "повтор старого refresh: 401 (reuse-защита, H1)"
+    refs: [R-016, H1]
+    status: verified
+
+  - id: TC-AUTH-08
+    title: Logout гасит только текущую сессию (мульти-девайс)
+    priority: P0
+    type: scenario
+    component: auth
+    labels: [security, logout, multi-device, regression]
+    regress: F3
+    preconditions: ["Один клиент, две сессии: устройства A и B"]
+    steps:
+      - "POST /auth/logout с access-токеном A"
+      - "POST /auth/refresh с refresh A"
+      - "POST /auth/refresh с refresh B"
+    expected:
+      - "logout A: 204"
+      - "refresh A: 401 (сессия A погашена)"
+      - "refresh B: 200 (устройство B не затронуто, H2)"
+    refs: [/auth/logout, R-016, H2]
+    status: verified
+
+  # ---- SLOTS + MAP ----
+  - id: TC-SLOT-04
+    title: /slots и /slots/{id} отдают route.geometry
+    priority: P0
+    type: component
+    component: slots
+    labels: [api, geometry, regression]
+    regress: F1
+    preconditions: ["Есть токен; сид-трасса с geometry"]
+    steps:
+      - "GET /slots (Authorization: Bearer)"
+      - "GET /slots/{id}"
+    expected:
+      - "route.geometry присутствует (массив [[lat,lng],...])"
+      - "координаты совпадают с данными трассы"
+    refs: [Route.geometry, SCR-003, 02-development/tasks/F1-route-geometry-slots.md]
+    status: verified
+
+  - id: TC-SLOT-05
+    title: Карта рисует реальный трасса по geometry
+    priority: P0
+    type: component
+    component: slots
+    labels: [ui, map, geometry, regression]
+    regress: F2
+    preconditions: ["Слот с непустой geometry, веб-клиент запущен"]
+    steps: ["Открыть карточку слота (SCR-003)"]
+    expected:
+      - "на карте ломаная по реальным координатам (север сверху, без искажения)"
+      - "пин в стартовой точке"
+    refs: [BS-004, 02-development/tasks/F2-route-map-geometry.md]
+    status: verified
+
+  - id: TC-SLOT-06
+    title: geometry=null — декоративный fallback, экран не падает
+    priority: P2
+    type: component
+    component: slots
+    labels: [ui, map, edge, regression]
+    regress: F2
+    preconditions: ["Слот без geometry"]
+    steps: ["Открыть карточку слота"]
+    expected:
+      - "показана декоративная заглушка-линия"
+      - "поле geometry опущено в ответе"
+    refs: [BS-004]
+    status: verified
+
+  # ---- BOOKING ----
+  - id: TC-BOOK-04
+    title: Конкурентная запись без овербукинга
+    priority: P0
+    type: scenario
+    component: booking
+    labels: [concurrency, integrity]
+    regress: null
+    preconditions: ["Слот с free_seats=1"]
+    steps: ["N параллельных createBooking на это место"]
+    expected:
+      - "ровно 1 успех (201)"
+      - "остальные: 409 slot_full"
+      - "0 дублей; счётчики консистентны"
+    refs: [NFR-8, NFR-22, TestCreateBookingConcurrencyDoesNotOverbook]
+    status: covered-by-autotest
+
+  - id: TC-BOOK-06
+    title: Ранняя отмена (>=2ч) освобождает места; ровно 2ч = ранняя
+    priority: P0
+    type: scenario
+    component: booking
+    labels: [cancel, boundary]
+    preconditions: ["Активная бронь, start_at - now >= 2ч"]
+    steps: ["POST /bookings/{id}/cancel"]
+    expected:
+      - "200, status=cancelled"
+      - "free_seats и free_rental_boards возвращены"
+      - "граница ровно 2ч трактуется как ранняя"
+    refs: [LOGIC-004, TestCancelBookingEarlyLateAndAfterStart]
+    status: covered-by-autotest
+
+  - id: TC-BOOK-07
+    title: Поздняя отмена (<2ч) — late_cancel, места не освобождаются
+    priority: P0
+    type: scenario
+    component: booking
+    labels: [cancel, boundary]
+    preconditions: ["Активная бронь, start_at - now < 2ч"]
+    steps: ["POST /bookings/{id}/cancel"]
+    expected:
+      - "200, status=late_cancel"
+      - "места/экипировки НЕ возвращены"
+    refs: [LOGIC-004, TestCancelBookingEarlyLateAndAfterStart]
+    status: covered-by-autotest
+
+  # ---- MY BOOKINGS ----
+  - id: TC-MYB-02
+    title: Порядок сортировки броней (ближайшая предстоящая и свежая прошедшая — первыми)
+    priority: P0
+    type: scenario
+    component: my-bookings
+    labels: [sorting, pagination, regression]
+    regress: B2
+    needs_clarification: "C2 — api.yaml декларирует DESC; серверный порядок закрыт B2"
+    preconditions: ["Брони на now+1д, now+10д, now-1д, now-10д"]
+    steps: ["GET /bookings"]
+    expected:
+      - "предстоящие по возрастанию: +1д перед +10д (AC-002)"
+      - "прошедшие по убыванию: -1д перед -10д (AC-003)"
+    refs: [SCR-005, AC-002, AC-003, 02-development/tasks/B2-booking-list-sort-order.md]
+    status: verified
+
+  - id: TC-MYB-04
+    title: Клиент видит только свои брони (NFR-12)
+    priority: P0
+    type: scenario
+    component: my-bookings
+    labels: [security, authorization]
+    preconditions: ["Есть брони разных клиентов"]
+    steps:
+      - "GET /bookings клиентом A"
+      - "GET /bookings/{id чужой брони}"
+    expected:
+      - "список содержит только брони A"
+      - "чужая бронь: 403 forbidden"
+    refs: [NFR-12, TestListAndGetBookings]
+    status: covered-by-autotest
+
+  # ---- BUILD ----
+  - id: TC-BUILD-01
+    title: Образ API собирается (Go 1.25)
+    priority: P0
+    type: scenario
+    component: infra
+    labels: [build, docker, regression]
+    regress: B3
+    preconditions: ["Docker + compose"]
+    steps: ["docker compose --profile app up --build api"]
+    expected:
+      - "go mod download и go build проходят"
+      - "контейнер поднимается; /healthz -> {status: ok}"
+    refs: [02-development/tasks/B3-dockerfile-go-version.md]
+    status: verified
