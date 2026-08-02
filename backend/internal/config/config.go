@@ -15,6 +15,19 @@ type Config struct {
 	// В dev разрешено возвращать OTP-код в ответе /auth/request-code (для ручной проверки
 	// без реальной отправки SMS). В production код никогда не возвращается клиенту.
 	Dev bool
+	// AllowedOrigin — точный Origin фронтенда, которому разрешён CORS в production
+	// (например, https://apex.onrender.com). Пусто — CORS в production не включается.
+	// В dev это не используется: там разрешён любой Origin (devCORSMiddleware).
+	AllowedOrigin string
+	// AutoMigrate включает применение миграций программно при старте сервиса
+	// (через то же DATABASE_URL, что и всё приложение). По умолчанию выключено —
+	// локальный workflow (make migrate) не меняется. Включается явно (AUTO_MIGRATE=true)
+	// для окружений вроде Render, где внешний доступ к БД для ручных миграций недоступен/нестабилен.
+	AutoMigrate bool
+	// AutoSeed включает применение демо-данных (seed.MockClientAppStates) программно
+	// при старте, тем же путём, что и AutoMigrate. Отдельный флаг: сид — не часть схемы, не
+	// нужен на каждом окружении (например, в тестах — только миграции).
+	AutoSeed bool
 }
 
 func Load() (Config, error) {
@@ -28,6 +41,9 @@ func Load() (Config, error) {
 		DatabaseURL:     stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
 		ShutdownTimeout: shutdownTimeout,
 		Dev:             boolFromEnvIsNot("APP_ENV", "production"),
+		AllowedOrigin:   stringFromEnv("ALLOWED_ORIGIN", ""),
+		AutoMigrate:     os.Getenv("AUTO_MIGRATE") == "true",
+		AutoSeed:        os.Getenv("AUTO_SEED") == "true",
 	}, nil
 }
 

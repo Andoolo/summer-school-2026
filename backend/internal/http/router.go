@@ -29,6 +29,10 @@ type RouterOptions struct {
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
+	// AllowedOrigin — точный Origin, которому разрешён CORS, когда Dev=false (production).
+	// В отличие от devCORSMiddleware (разрешает любой Origin), здесь — строгое сравнение
+	// с одним заранее известным доменом фронтенда. Пусто — CORS в production выключен.
+	AllowedOrigin string
 }
 
 func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
@@ -44,10 +48,14 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	router.Use(requestIDMiddleware)
 	router.Use(recoverMiddleware(logger))
 	router.Use(accessLogMiddleware(logger))
-	if opts.Dev {
+	switch {
+	case opts.Dev:
 		// Только в dev: разрешающий CORS для локального веб-клиента (wasmJs на другом порту).
-		// В production не подключается.
 		router.Use(devCORSMiddleware)
+	case opts.AllowedOrigin != "":
+		// В production: CORS разрешён только заранее заданному домену фронтенда — без
+		// отражения произвольного Origin, в отличие от dev-режима.
+		router.Use(productionCORSMiddleware(opts.AllowedOrigin))
 	}
 	router.Use(jsonContentTypeMiddleware)
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -101,4 +109,27 @@ func devCORSMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// productionCORSMiddleware разрешает cross-origin запросы только с точно заданного Origin
+// (домен задеплоенного фронтенда). В отличие от devCORSMiddleware, НЕ отражает произвольный
+// Origin — запросы с любого другого источника не получат CORS-заголовков и будут заблокированы
+// браузером.
+func productionCORSMiddleware(allowedOrigin string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if origin := r.Header.Get("Origin"); origin == allowedOrigin {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
+				w.Header().Set("Access-Control-Max-Age", "600")
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
