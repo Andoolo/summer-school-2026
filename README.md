@@ -3,13 +3,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Andoolo/summer-school-2026/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Andoolo/summer-school-2026/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2.20-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose Multiplatform" src="https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
-  <img alt="tests" src="https://img.shields.io/badge/go%20test-passing-2ea44f">
-  <img alt="wasmJs" src="https://img.shields.io/badge/wasmJs-BUILD%20SUCCESSFUL-2ea44f">
 </p>
 
 <h1 align="center">Летняя школа Surf 2026 — задание</h1>
