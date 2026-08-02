@@ -62,14 +62,40 @@
             ? ""
             : "https://summer-school-2026.onrender.com";
 
-    // window.load — не идеальный сигнал "приложение отрисовалось" (wasm догружается уже
-    // после этого события), но простой и надёжный: полностью пустой экран сокращается
-    // до пары кадров вместо нескольких секунд.
-    window.addEventListener("load", function () {
-        setTimeout(function () {
-            document.getElementById("loading-overlay").classList.add("hidden");
-        }, 400);
-    });
+    // window.load срабатывает до того, как реально догрузились .wasm-файлы (они фетчатся
+    // уже из кода volna-web.js) — поэтому спиннер гас раньше времени, оставляя пустой белый
+    // экран на секунды. Вместо этого следим за реальной загрузкой ресурсов через
+    // PerformanceObserver: скрываем оверлей, когда оба .wasm-файла (skiko + volna-web)
+    // фактически докачаны.
+    (function () {
+        var overlay = document.getElementById("loading-overlay");
+        var EXPECTED_WASM_FILES = 2;
+        var wasmLoaded = 0;
+        var hidden = false;
+
+        function hideOverlay() {
+            if (hidden) return;
+            hidden = true;
+            setTimeout(function () {
+                overlay.classList.add("hidden");
+            }, 200);
+        }
+
+        if (window.PerformanceObserver) {
+            new PerformanceObserver(function (list) {
+                list.getEntries().forEach(function (entry) {
+                    if (entry.name.endsWith(".wasm")) {
+                        wasmLoaded++;
+                        if (wasmLoaded >= EXPECTED_WASM_FILES) hideOverlay();
+                    }
+                });
+            }).observe({ type: "resource", buffered: true });
+        }
+
+        // Страховка: браузер без PerformanceObserver или неожиданное число wasm-файлов —
+        // спиннер не должен висеть вечно.
+        setTimeout(hideOverlay, 15000);
+    })();
 </script>
 <script src="skiko.js"></script>
 <script src="volna-web.js"></script>
