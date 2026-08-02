@@ -9,6 +9,7 @@ import (
 	instructorsapi "summer-school-2026/backend/internal/http/openapi/instructors"
 	slotsapi "summer-school-2026/backend/internal/http/openapi/slots"
 	"summer-school-2026/backend/internal/storage/postgres"
+	"summer-school-2026/backend/internal/track"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -65,6 +66,105 @@ func (h *SlotHandler) Leaderboard(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	httpapi.WriteJSON(w, http.StatusOK, response)
+}
+
+// trackRecordDTO — действующий рекорд круга на трассе.
+type trackRecordDTO struct {
+	Name  string `json:"name"`
+	LapMs int    `json:"lap_ms"`
+}
+
+// trackPassportDTO — карточка трассы (F5).
+//
+// Поля length_m / corners / direction / main_straight_m считаются из geometry на
+// лету (internal/track), а не берутся из БД: так витрина не может разойтись с
+// контуром, который рисуется на схеме. Остальное — «паспорт» из routes.
+type trackPassportDTO struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	CapacityCap int         `json:"capacity_cap"`
+	DurationMin int         `json:"duration_min"`
+	Geometry    [][]float64 `json:"geometry"`
+
+	LengthM       int    `json:"length_m"`
+	Corners       int    `json:"corners"`
+	Direction     string `json:"direction"`
+	MainStraightM int    `json:"main_straight_m"`
+
+	Surface     *string  `json:"surface,omitempty"`
+	WidthM      *float64 `json:"width_m,omitempty"`
+	ElevationM  *float64 `json:"elevation_m,omitempty"`
+	OpenedYear  *int     `json:"opened_year,omitempty"`
+	KartModel   *string  `json:"kart_model,omitempty"`
+	KartPowerHP *int     `json:"kart_power_hp,omitempty"`
+
+	Record *trackRecordDTO `json:"record,omitempty"`
+}
+
+// TrackPassport — GET /routes/{routeID}: карточка трассы (картинг-фича F5).
+// Маршрут регистрируется вручную (RouterOptions.RoutePassport) — в OpenAPI-транспорте его нет.
+func (h *SlotHandler) TrackPassport(w http.ResponseWriter, r *http.Request) {
+	routeID, err := uuid.Parse(chi.URLParam(r, "routeID"))
+	if err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, "Неверные параметры запроса. Проверьте корректность переданных значений.", nil)
+		return
+	}
+
+	p, found, err := h.repo.RoutePassportByID(r.Context(), routeID.String())
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
+		return
+	}
+	if !found {
+		httpapi.WriteError(w, http.StatusNotFound, httpapi.CodeNotFound, "Запрашиваемый ресурс не найден.", nil)
+		return
+	}
+
+	// Геометрия может быть пустой или лежать строкой-полилинией (см. slotBase) —
+	// в этом случае считать по ней нечего, отдаём карточку без выведенных метрик.
+	var coords [][]float64
+	if len(p.Geometry) > 0 && !isJSONString(p.Geometry) {
+		if err := json.Unmarshal(p.Geometry, &coords); err != nil {
+			httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
+			return
+		}
+	}
+
+	points := make([]track.Point, 0, len(coords))
+	for _, c := range coords {
+		if len(c) >= 2 {
+			points = append(points, track.Point{Lat: c[0], Lng: c[1]})
+		}
+	}
+	stats := track.Compute(points)
+
+	dto := trackPassportDTO{
+		ID:            p.ID,
+		Name:          p.Name,
+		Type:          p.Type,
+		CapacityCap:   p.CapacityCap,
+		DurationMin:   p.DurationMin,
+		Geometry:      coords,
+		LengthM:       stats.LengthM,
+		Corners:       stats.Corners,
+		Direction:     string(stats.Direction),
+		MainStraightM: stats.MainStraightM,
+		Surface:       p.Surface,
+		WidthM:        p.WidthM,
+		ElevationM:    p.ElevationM,
+		OpenedYear:    p.OpenedYear,
+		KartModel:     p.KartModel,
+		KartPowerHP:   p.KartPowerHP,
+	}
+	if p.RecordHolder != nil && p.RecordLapMs != nil {
+		dto.Record = &trackRecordDTO{Name: *p.RecordHolder, LapMs: *p.RecordLapMs}
+	}
+	if dto.Geometry == nil {
+		dto.Geometry = [][]float64{}
+	}
+
+	httpapi.WriteJSON(w, http.StatusOK, dto)
 }
 
 func (h *SlotHandler) ListSlots(w http.ResponseWriter, r *http.Request, params slotsapi.ListSlotsParams) {

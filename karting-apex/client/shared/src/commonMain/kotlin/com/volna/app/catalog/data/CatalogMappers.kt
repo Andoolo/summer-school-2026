@@ -14,6 +14,9 @@ import com.volna.app.domain.model.RouteType
 import com.volna.app.domain.model.Slot
 import com.volna.app.domain.model.SlotId
 import com.volna.app.domain.model.SlotStatus
+import com.volna.app.domain.model.TrackDirection
+import com.volna.app.domain.model.TrackPassport
+import com.volna.app.domain.model.TrackRecord
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.doubleOrNull
@@ -78,6 +81,32 @@ fun LeaderboardEntryDto.toDomain(): LeaderboardEntry = LeaderboardEntry(
     name = name,
     bestLapMs = bestLapMs,
     laps = laps,
+)
+
+fun TrackPassportDto.toDomain(): TrackPassport = TrackPassport(
+    id = RouteId(id),
+    name = name,
+    type = when (type) {
+        "experienced" -> RouteType.Experienced
+        else -> RouteType.Novice
+    },
+    capacityCap = capacityCap,
+    durationMin = durationMin,
+    geometry = geometry?.toRouteGeometry(),
+    lengthM = lengthM,
+    corners = corners,
+    direction = when (direction) {
+        "clockwise" -> TrackDirection.Clockwise
+        else -> TrackDirection.CounterClockwise
+    },
+    mainStraightM = mainStraightM,
+    surface = surface,
+    widthM = widthM,
+    elevationM = elevationM,
+    openedYear = openedYear,
+    kartModel = kartModel,
+    kartPowerHp = kartPowerHp,
+    record = record?.let { TrackRecord(name = it.name, lapMs = it.lapMs) },
 )
 
 private fun JsonElement.toRouteGeometry(): RouteGeometry? {

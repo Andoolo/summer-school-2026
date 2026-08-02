@@ -84,3 +84,41 @@ data class LeaderboardEntryDto(
     val bestLapMs: Int,
     val laps: Int,
 )
+
+/** Карточка трассы (картинг-фича F5, GET /routes/{id}). */
+@Serializable
+data class TrackPassportDto(
+    val id: String,
+    val name: String,
+    val type: String,
+    @SerialName("capacity_cap")
+    val capacityCap: Int,
+    @SerialName("duration_min")
+    val durationMin: Int,
+    val geometry: JsonElement? = null,
+    @SerialName("length_m")
+    val lengthM: Int,
+    val corners: Int,
+    val direction: String,
+    @SerialName("main_straight_m")
+    val mainStraightM: Int,
+    val surface: String? = null,
+    @SerialName("width_m")
+    val widthM: Double? = null,
+    @SerialName("elevation_m")
+    val elevationM: Double? = null,
+    @SerialName("opened_year")
+    val openedYear: Int? = null,
+    @SerialName("kart_model")
+    val kartModel: String? = null,
+    @SerialName("kart_power_hp")
+    val kartPowerHp: Int? = null,
+    val record: TrackRecordDto? = null,
+)
+
+@Serializable
+data class TrackRecordDto(
+    val name: String,
+    @SerialName("lap_ms")
+    val lapMs: Int,
+)

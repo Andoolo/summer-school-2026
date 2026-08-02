@@ -7,6 +7,7 @@ import com.volna.app.domain.model.RouteId
 import com.volna.app.domain.model.RouteType
 import com.volna.app.domain.model.Slot
 import com.volna.app.domain.model.SlotId
+import com.volna.app.domain.model.TrackPassport
 import kotlinx.datetime.Instant
 
 data class SlotFilters(
@@ -35,6 +36,9 @@ interface SlotRepository {
 
     /** Рекорды трассы: топ лучших кругов (картинг-фича, GET /routes/{id}/leaderboard). */
     suspend fun leaderboard(routeId: RouteId): Result<List<LeaderboardEntry>>
+
+    /** Карточка трассы: схема, характеристики и рекорд круга (картинг-фича F5, GET /routes/{id}). */
+    suspend fun trackPassport(routeId: RouteId): Result<TrackPassport>
 }
 
 interface InstructorRepository {

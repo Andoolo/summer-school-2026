@@ -1,6 +1,5 @@
 package com.volna.app.catalog.presentation
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,16 +13,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
+import com.volna.app.map.TrackMinimap
 import com.volna.app.core.ui.Loadable
 import com.volna.app.domain.model.Slot
 import com.volna.app.domain.model.SlotId
@@ -305,66 +302,13 @@ private fun SlotDetailsMapCard(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        SlotDetailsMapPreview()
+        TrackMinimap(points = slot.route.geometry?.points.orEmpty())
         Text(
             text = "Открыть карту",
             modifier = Modifier.clickable { onOpenMap() },
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF0093CC),
+            color = VolnaTheme.tokens.colors.brand,
         )
-    }
-}
-
-@Composable
-private fun SlotDetailsMapPreview() {
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(156.dp)
-            .background(Color.White, RoundedCornerShape(VolnaTheme.tokens.radius.sm)),
-    ) {
-        val corner = 12.dp.toPx()
-        drawRoundRect(
-            color = Color(0xFF8AD0F0),
-            cornerRadius = CornerRadius(corner, corner),
-        )
-        drawRoundRect(
-            color = Color(0xFFDDF3CC),
-            topLeft = Offset(size.width * 0.02f, 0f),
-            size = androidx.compose.ui.geometry.Size(size.width * 0.22f, size.height),
-            cornerRadius = CornerRadius(corner, corner),
-        )
-        drawRoundRect(
-            color = Color(0xFFDDF3CC),
-            topLeft = Offset(size.width * 0.84f, 0f),
-            size = androidx.compose.ui.geometry.Size(size.width * 0.16f, size.height),
-            cornerRadius = CornerRadius(corner, corner),
-        )
-        listOf(0.22f, 0.50f, 0.78f).forEach { y ->
-            drawLine(
-                color = Color(0xFFF9F6F0),
-                start = Offset(0f, size.height * y),
-                end = Offset(size.width, size.height * (y - 0.12f)),
-                strokeWidth = 6.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-        val routePoints = listOf(
-            Offset(size.width * 0.34f, size.height * 0.88f),
-            Offset(size.width * 0.48f, size.height * 0.58f),
-            Offset(size.width * 0.62f, size.height * 0.36f),
-        )
-        routePoints.zipWithNext().forEach { (start, end) ->
-            drawLine(
-                color = Color(0xFF00A59D),
-                start = start,
-                end = end,
-                strokeWidth = 4.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-        drawCircle(Color(0xFFFF6B4A), radius = 6.dp.toPx(), center = routePoints.first())
-        drawCircle(Color.White, radius = 2.5.dp.toPx(), center = routePoints.first())
     }
 }
 

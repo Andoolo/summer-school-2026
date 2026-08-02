@@ -28,6 +28,8 @@ type RouterOptions struct {
 	AuthRefresh http.HandlerFunc
 	// RouteLeaderboard — ручной маршрут GET /routes/{routeID}/leaderboard (рекорды трассы, картинг).
 	RouteLeaderboard http.HandlerFunc
+	// RoutePassport — ручной маршрут GET /routes/{routeID} (карточка трассы, картинг F5).
+	RoutePassport http.HandlerFunc
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
@@ -76,6 +78,9 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.RouteLeaderboard != nil {
 		router.Get("/routes/{routeID}/leaderboard", opts.RouteLeaderboard)
+	}
+	if opts.RoutePassport != nil {
+		router.Get("/routes/{routeID}", opts.RoutePassport)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})

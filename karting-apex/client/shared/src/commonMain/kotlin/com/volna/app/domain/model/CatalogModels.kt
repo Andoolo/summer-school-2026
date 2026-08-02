@@ -43,6 +43,45 @@ data class LeaderboardEntry(
     val laps: Int,
 )
 
+/** Направление прохождения круга. */
+enum class TrackDirection {
+    Clockwise,
+    CounterClockwise,
+}
+
+/** Действующий рекорд круга на трассе. */
+data class TrackRecord(
+    val name: String,
+    val lapMs: Int,
+)
+
+/**
+ * Карточка трассы (картинг-фича F5, GET /routes/{id}).
+ *
+ * [lengthM], [corners], [direction] и [mainStraightM] считает бэкенд из той же
+ * геометрии, которая рисуется на схеме, — поэтому цифры не могут разойтись с
+ * контуром. Остальное — «паспорт» трассы из БД, он может быть не заполнен.
+ */
+data class TrackPassport(
+    val id: RouteId,
+    val name: String,
+    val type: RouteType,
+    val capacityCap: Int,
+    val durationMin: Int,
+    val geometry: RouteGeometry?,
+    val lengthM: Int,
+    val corners: Int,
+    val direction: TrackDirection,
+    val mainStraightM: Int,
+    val surface: String? = null,
+    val widthM: Double? = null,
+    val elevationM: Double? = null,
+    val openedYear: Int? = null,
+    val kartModel: String? = null,
+    val kartPowerHp: Int? = null,
+    val record: TrackRecord? = null,
+)
+
 data class MeetingPoint(
     val title: String,
     val coordinates: GeoPoint,

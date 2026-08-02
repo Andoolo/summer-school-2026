@@ -240,6 +240,64 @@ LIMIT $2`, routeID, limit)
 	return routeName, entries, true, nil
 }
 
+// RoutePassport — «паспортные» характеристики трассы из БД (F5). Всё, что
+// выводится из геометрии (длина круга, повороты, направление, главная прямая),
+// здесь намеренно отсутствует: это считает internal/track по тому же контуру,
+// который рисуется на схеме.
+type RoutePassport struct {
+	ID          string
+	Name        string
+	Type        string
+	CapacityCap int
+	DurationMin int
+	Geometry    []byte // сырой jsonb ([[lat,lng],...] или null)
+
+	Surface     *string
+	WidthM      *float64
+	ElevationM  *float64
+	OpenedYear  *int
+	KartModel   *string
+	KartPowerHP *int
+
+	// Рекорд круга по этой трассе, если заезды уже были.
+	RecordHolder *string
+	RecordLapMs  *int
+}
+
+// RoutePassportByID отдаёт паспорт трассы вместе с текущим рекордом круга.
+// Второе значение — false, если трассы с таким id нет.
+func (r *SlotRepository) RoutePassportByID(ctx context.Context, routeID string) (RoutePassport, bool, error) {
+	var p RoutePassport
+	err := r.db.QueryRow(ctx, `
+SELECT
+    rt.id::text, rt.name, rt.type, rt.capacity_cap, rt.duration_min, rt.geometry,
+    rt.surface, rt.width_m, rt.elevation_m, rt.opened_year, rt.kart_model, rt.kart_power_hp,
+    record.name, record.lap_ms
+FROM routes rt
+LEFT JOIN LATERAL (
+    SELECT COALESCE(c.name, 'Гонщик') AS name, lr.lap_time_ms AS lap_ms
+    FROM lap_results lr
+    JOIN bookings b ON b.id = lr.booking_id
+    JOIN slots s ON s.id = b.slot_id
+    JOIN clients c ON c.id = b.client_id
+    WHERE s.route_id = rt.id
+    ORDER BY lr.lap_time_ms ASC
+    LIMIT 1
+) record ON true
+WHERE rt.id = $1`, routeID).Scan(
+		&p.ID, &p.Name, &p.Type, &p.CapacityCap, &p.DurationMin, &p.Geometry,
+		&p.Surface, &p.WidthM, &p.ElevationM, &p.OpenedYear, &p.KartModel, &p.KartPowerHP,
+		&p.RecordHolder, &p.RecordLapMs,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RoutePassport{}, false, nil
+	}
+	if err != nil {
+		return RoutePassport{}, false, fmt.Errorf("get route passport: %w", err)
+	}
+	return p, true, nil
+}
+
 func slotWhere(filters SlotFilters) (string, []any) {
 	conditions := make([]string, 0)
 	args := make([]any, 0)

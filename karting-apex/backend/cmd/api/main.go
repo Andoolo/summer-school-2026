@@ -77,6 +77,7 @@ func main() {
 			Slots:            slotHandler,
 			Instructors:      instructorHandler,
 			RouteLeaderboard: slotHandler.Leaderboard,
+			RoutePassport:    slotHandler.TrackPassport,
 			Dev:              cfg.Dev,
 			AllowedOrigin:    cfg.AllowedOrigin,
 		}),
