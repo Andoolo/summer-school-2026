@@ -24,12 +24,11 @@
 <script>
     // Локальная разработка (localhost/127.0.0.1) — оставляем пусто, клиент падает на
     // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8090).
-    // Продакшн-деплой — подставляем публичный URL задеплоенного бэкенда «Апекс» на Render.
-    // TODO(деплой): заменить на реальный адрес backend-сервиса после первого деплоя.
+    // Продакшн-деплой — публичный URL задеплоенного бэкенда «Апекс» на Render.
     window.__API_BASE_URL__ =
         (location.hostname === "localhost" || location.hostname === "127.0.0.1")
             ? ""
-            : "https://REPLACE_WITH_RENDER_BACKEND_URL";
+            : "https://summer-school-2026.onrender.com";
 </script>
 <script src="skiko.js"></script>
 <script src="volna-web.js"></script>
