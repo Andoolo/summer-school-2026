@@ -1,0 +1,8 @@
+package: profileapi
+generate:
+  chi-server: true
+  models: true
+  embedded-spec: true
+output: profile/profile.gen.go
+output-options:
+  skip-prune: true

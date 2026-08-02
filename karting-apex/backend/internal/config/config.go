@@ -1,0 +1,60 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"time"
+)
+
+type Config struct {
+	HTTPAddr        string
+	DatabaseURL     string
+	ShutdownTimeout time.Duration
+	// Dev true в окружениях, отличных от production.
+	// В dev разрешено возвращать OTP-код в ответе /auth/request-code (для ручной проверки
+	// без реальной отправки SMS). В production код никогда не возвращается клиенту.
+	Dev bool
+}
+
+func Load() (Config, error) {
+	shutdownTimeout, err := durationFromEnv("SHUTDOWN_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
+	return Config{
+		HTTPAddr:        stringFromEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:     stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
+		ShutdownTimeout: shutdownTimeout,
+		Dev:             boolFromEnvIsNot("APP_ENV", "production"),
+	}, nil
+}
+
+func stringFromEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+// boolFromEnvIsNot возвращает true, если значение env-переменной key не равно forbidden.
+// Используется для флага Dev: всё, что не "production" — считаем dev (безопасный дефолт).
+func boolFromEnvIsNot(key, forbidden string) bool {
+	return os.Getenv(key) != forbidden
+}
+
+func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer number of seconds", key)
+	}
+
+	return time.Duration(seconds) * time.Second, nil
+}

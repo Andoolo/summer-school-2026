@@ -1,0 +1,62 @@
+name: apex   # отдельное имя проекта — изоляция от «Волны» (контейнеры/сеть/том apex-*)
+
+services:
+  db:
+    image: postgres:16-alpine
+    profiles: ["db", "app", "migrations", "k6"]
+    environment:
+      POSTGRES_DB: volna
+      POSTGRES_USER: volna
+      POSTGRES_PASSWORD: volna
+    ports:
+      - "25432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volna -d volna"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    profiles: ["app", "k6"]
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: "postgres://volna:volna@db:5432/volna?sslmode=disable"
+      APP_ENV: "development"
+    ports:
+      - "8090:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrate:
+    image: golang:1.23-alpine
+    profiles: ["migrations"]
+    working_dir: /src
+    environment:
+      DATABASE_URL: "postgres://volna:volna@db:5432/volna?sslmode=disable"
+    volumes:
+      - .:/src
+    depends_on:
+      db:
+        condition: service_healthy
+    command: go run github.com/pressly/goose/v3/cmd/goose@v3.24.1 -dir migrations postgres "postgres://volna:volna@db:5432/volna?sslmode=disable" up
+
+  k6:
+    image: grafana/k6:2.0.0
+    profiles: ["k6"]
+    environment:
+      BASE_URL: "http://api:8080"
+      VUS: "1"
+      ITERATIONS: "1"
+    volumes:
+      - ./k6:/scripts:ro
+    depends_on:
+      api:
+        condition: service_started
+    command: run /scripts/smoke.js
+
+volumes:
+  postgres-data:

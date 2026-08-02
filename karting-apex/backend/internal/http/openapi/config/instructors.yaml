@@ -1,0 +1,8 @@
+package: instructorsapi
+generate:
+  chi-server: true
+  models: true
+  embedded-spec: true
+output: instructors/instructors.gen.go
+output-options:
+  skip-prune: true

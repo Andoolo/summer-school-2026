@@ -1,0 +1,8 @@
+# Офлайн-сборка: бинарь собран заранее (bin/api) через кэш Go-модулей.
+FROM alpine:3.20
+RUN adduser -D -H appuser
+WORKDIR /app
+COPY bin/api /app/api
+USER appuser
+EXPOSE 8080
+ENTRYPOINT ["/app/api"]

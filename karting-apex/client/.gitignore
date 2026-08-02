@@ -1,0 +1,106 @@
+# === idea ===
+**/*.iml
+/.idea/
+/.run/
+
+# === kotlin ===
+/.kotlin/
+
+# === gradle ===
+**/.gradle/
+**/local.properties
+
+# === ruby / bundler ===
+.bundle/ruby
+
+# === python ===
+__pycache__/
+
+# === temp ===
+**/build/
+**/temp/
+**/bin/
+**/captures
+
+# === signing ===
+**/keystore/
+
+# === OS specific ===
+**/.DS_Store
+
+# === native ===
+**/.cxx/
+**/captures/
+**/.externalNativeBuild/
+
+keystore/release_keystore.jks
+keystore/burgerking_release.properties
+keys/src/main/kotlin/ru/burgerking/keys/*
+keys/src/test/kotlin/ru/burgerking/keys/*
+scripts/arkana/.env
+files.txt
+secure_files.json
+
+#Services platfrom files
+app/agconnect-services.json
+app/src/release/google-services.json
+app/google-services.json
+
+# Xcode user-specific data
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Shared schemes should be committed if used by CI/team
+# Keep:
+# *.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+# *.xcworkspace/xcshareddata/xcschemes/*.xcscheme
+
+# Xcode build artifacts
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+*.xcworkspace
+
+# Keep Podfile and Podfile.lock if CocoaPods is used
+# !Podfile
+# !Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# AppCode / JetBrains
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Secrets / local config
+*.mobileprovision
+*.p12
+*.cer
+*.key
+*.env
+.env.*
+GoogleService-Info.plist
+
+# Logs
+*.log
