@@ -18,9 +18,12 @@
             height: 100vh;
         }
 
-        /* Прелоадер на время загрузки wasm-бандла (~13 МБ) — без него первые секунды
-           показывают пустой белый экран. Болид едет по овалу трассы; когда приложение
-           готово — короткая вспышка клетчатого флага перед появлением интерфейса. */
+        /* ===================================================================
+           Прелоадер: пока грузится и компилируется wasm-бандл (~13 МБ), экран
+           был бы просто белым несколько секунд. Вместо этого — гоночная сцена:
+           гаснут стартовые огни, болид уходит по трассе, за ним заполняется
+           полоса и к финишу переходит в клетчатый флаг.
+           =================================================================== */
         #loading-overlay {
             position: fixed;
             inset: 0;
@@ -28,14 +31,15 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 16px;
+            gap: 18px;
             background: #ffffff;
             z-index: 10;
-            transition: opacity 0.3s ease, background-color 0.22s ease;
+            transition: opacity .3s ease;
         }
 
+        /* Финиш: клетчатый флаг на весь экран перед тем, как показать приложение. */
         #loading-overlay.finishing {
-            background-image: repeating-conic-gradient(#161616 0% 25%, #ffffff 0% 50%);
+            background-image: repeating-conic-gradient(#161616 0 25%, #ffffff 0 50%);
             background-size: 28px 28px;
         }
 
@@ -44,80 +48,200 @@
             pointer-events: none;
         }
 
-        .loader-scene {
+        #loading-overlay.finishing .loader-box,
+        #loading-overlay.finishing .loader-brand { opacity: 0; transition: opacity .12s ease; }
+
+        .loader-box { width: min(320px, 78vw); }
+
+        /* --- стартовые огни --- */
+        .loader-lights {
+            display: flex;
+            gap: 7px;
+            justify-content: center;
+            /* болид выступает над полосой примерно на 37px — оставляем ему место */
+            margin-bottom: 46px;
+        }
+        .loader-lights b {
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #d4d4d8;
+        }
+        .loader-lights b:nth-child(1) { animation: lamp1 3.2s linear infinite }
+        .loader-lights b:nth-child(2) { animation: lamp2 3.2s linear infinite }
+        .loader-lights b:nth-child(3) { animation: lamp3 3.2s linear infinite }
+        .loader-lights b:nth-child(4) { animation: lamp4 3.2s linear infinite }
+        .loader-lights b:nth-child(5) { animation: lamp5 3.2s linear infinite }
+
+        @keyframes lamp1 { 0%,1%{background:#d4d4d8} 3%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+        @keyframes lamp2 { 0%,4%{background:#d4d4d8} 6%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+        @keyframes lamp3 { 0%,7%{background:#d4d4d8} 9%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+        @keyframes lamp4 { 0%,10%{background:#d4d4d8} 12%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+        @keyframes lamp5 { 0%,13%{background:#d4d4d8} 14%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+
+        /* --- трасса --- */
+        .loader-track { position: relative; }
+
+        .loader-road {
             position: relative;
-            width: 200px;
-            height: 120px;
+            height: 22px;
+            border-radius: 4px;
+            background: #2b2b2e;
+            overflow: hidden;
+        }
+        /* поребрик только по нижней кромке: болид едет по верхней, и пёстрая
+           красно-белая лента сверху конкурировала бы с ним за внимание */
+        .loader-road::after {
+            content: "";
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 3px;
+            z-index: 2;
+            background: repeating-linear-gradient(90deg, #E10600 0 13px, #e8e8ea 13px 26px);
         }
 
-        .track {
+        .loader-dash {
+            position: absolute;
+            left: 0; right: 0; top: 50%;
+            height: 2px;
+            margin-top: -1px;
+            background: repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 14px, transparent 14px 30px);
+        }
+
+        .loader-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            overflow: hidden;
+            background: linear-gradient(90deg, rgba(225,6,0,.25), rgba(225,6,0,.75));
+            animation: fillAcross 3.2s cubic-bezier(.45,.05,.35,1) infinite;
+        }
+        /* клетка «догоняет» болид ко второй половине круга */
+        .loader-fill::after {
+            content: "";
             position: absolute;
             inset: 0;
+            background-image: repeating-conic-gradient(#161616 0 25%, #fff 0 50%);
+            background-size: 13px 13px;
+            animation: flagWipe 3.2s cubic-bezier(.45,.05,.35,1) infinite;
         }
 
-        .kart-mover {
+        /* --- болид ---
+           Едет ПОВЕРХ полосы, а не внутри неё: кузов графитовый, и на тёмном
+           асфальте он бы слился. Так силуэт читается на светлом фоне, а колёса
+           стоят на верхней кромке трассы. */
+        .loader-kart {
             position: absolute;
-            top: 0;
+            bottom: 16px;
             left: 0;
-            width: 34px;
-            height: 17px;
-            margin-top: -8.5px;
-            margin-left: -17px;
-            offset-path: path("M100,14 A86,46 0 1,1 100,106 A86,46 0 1,1 100,14 Z");
-            offset-rotate: auto;
-            animation: drive 2.4s linear infinite;
+            width: 132px;
+            height: auto;
+            z-index: 4;
+            animation: driveAcross 3.2s cubic-bezier(.45,.05,.35,1) infinite,
+                       kartShake .09s linear infinite;
+        }
+        /* колёса стоят на старте и раскручиваются вместе с рывком с места */
+        .loader-kart .whl {
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: wheelSpin 3.2s cubic-bezier(.45,.05,.35,1) infinite;
         }
 
-        @keyframes drive {
-            from { offset-distance: 0%; }
-            to { offset-distance: 100%; }
-        }
+        @keyframes driveAcross { 0%,18%{ left:0 } 92%,100%{ left:calc(100% - 132px) } }
+        @keyframes fillAcross  { 0%,18%{ width:0 } 92%,100%{ width:100% } }
+        @keyframes flagWipe    { 0%,64%{ clip-path:inset(0 100% 0 0) } 92%,100%{ clip-path:inset(0 0 0 0) } }
+        @keyframes wheelSpin   { 0%,18%{ transform:rotate(0) } 100%{ transform:rotate(1440deg) } }
+        @keyframes kartShake   { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-.6px) } }
 
         .loader-brand {
             font-family: -apple-system, "Segoe UI", Arial, sans-serif;
             font-weight: 900;
             font-style: italic;
-            letter-spacing: 0.06em;
+            letter-spacing: .06em;
             text-transform: uppercase;
             color: #161616;
-            font-size: 20px;
+            font-size: 19px;
         }
-
         .loader-brand::after {
             content: "";
             display: inline-block;
-            width: 6px;
-            height: 6px;
+            width: 6px; height: 6px;
             margin-left: 4px;
             border-radius: 50%;
             background: #E10600;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .loader-lights b, .loader-kart, .loader-kart .whl,
+            .loader-fill, .loader-fill::after { animation: none }
+            .loader-fill { width: 60% }
         }
     </style>
 </head>
 <body>
 <canvas id="compose-root"></canvas>
+
 <div id="loading-overlay">
-    <div class="loader-scene">
-        <svg class="track" viewBox="0 0 200 120" width="200" height="120">
-            <ellipse cx="100" cy="60" rx="86" ry="46" fill="none" stroke="#e5e5e5" stroke-width="3"/>
-            <ellipse cx="100" cy="60" rx="86" ry="46" fill="none" stroke="#E10600" stroke-width="3"
-                     stroke-dasharray="9 11" stroke-linecap="round"/>
-        </svg>
-        <div class="kart-mover">
-            <svg class="kart" viewBox="0 0 60 30" width="34" height="17">
-                <rect x="10" y="24" width="8" height="4" rx="1" fill="#1a1a1a"/>
-                <rect x="14" y="12" width="30" height="8" rx="3" fill="#2b2b2b"/>
-                <path d="M44 12 L52 16 L44 20 Z" fill="#E10600"/>
-                <circle cx="24" cy="8" r="5" fill="#1a1a1a"/>
-                <circle cx="20" cy="24" r="6" fill="#111111"/>
-                <circle cx="20" cy="24" r="2.5" fill="#666666"/>
-                <circle cx="42" cy="24" r="6" fill="#111111"/>
-                <circle cx="42" cy="24" r="2.5" fill="#666666"/>
+    <div class="loader-box">
+        <div class="loader-lights"><b></b><b></b><b></b><b></b><b></b></div>
+        <div class="loader-track">
+            <div class="loader-road">
+                <div class="loader-dash"></div>
+                <div class="loader-fill"></div>
+            </div>
+            <svg class="loader-kart" viewBox="0 0 320 105" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <ellipse cx="164" cy="94" rx="146" ry="5" fill="#000" opacity=".3"/>
+                <g stroke="#0d0d0f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+                    <path d="M6 26 L20 24 L20 62 L6 62 Z" fill="#E10600"/>
+                    <path d="M18 28 L58 25 L58 37 L18 40 Z" fill="#E10600"/>
+                    <path d="M22 42 L56 40 L56 49 L22 51 Z" fill="#3a3a44"/>
+                    <path d="M36 51 L36 66" fill="none"/>
+                    <path d="M50 76 L272 74 L272 85 L54 87 Q48 87 48 81 Z" fill="#17171c"/>
+                    <path d="M46 60 Q46 52 57 51 L112 47 Q142 43 152 41 L180 41 L183 49 L216 51 L216 84 L58 84 Q46 84 46 74 Z" fill="#33333c"/>
+                    <path d="M46 60 Q46 52 57 51 L104 48 L104 84 L58 84 Q46 84 46 74 Z" fill="#E10600"/>
+                    <path d="M212 50 Q242 54 264 63 L290 75 L290 84 L212 84 Z" fill="#33333c"/>
+                    <path d="M110 58 Q110 50 124 49 L198 46 L198 84 L110 84 Z" fill="#3a3a44"/>
+                    <path d="M184 50 L198 49 Q206 49 206 57 L206 68 L184 68 Z" fill="#17171c"/>
+                    <path d="M148 41 Q146 27 158 23 L170 23 Q182 27 179 41 Z" fill="#E10600"/>
+                    <path d="M182 45 Q187 37 200 38 L210 48 L183 50 Z" fill="#17171c"/>
+                    <path d="M268 76 L314 73 L314 84 L268 87 Z" fill="#33333c"/>
+                    <path d="M302 64 L316 63 L316 87 L302 88 Z" fill="#E10600"/>
+                </g>
+                <g stroke="#0d0d0f" stroke-width="3" stroke-linecap="round" fill="none">
+                    <path d="M92 60 L112 52"/><path d="M96 72 L118 70"/>
+                    <path d="M228 62 L212 56"/><path d="M232 74 L214 72"/>
+                </g>
+                <circle cx="192" cy="32" r="9.5" fill="#f4f4f6" stroke="#0d0d0f" stroke-width="3.5"/>
+                <path d="M182.5 30 Q184 21 192 20 Q200 21 201.5 29 L201.5 32 L182.5 32 Z" fill="#E10600"/>
+                <path d="M183 34 Q189 30 197 31 L197 38 Q186 39 183 35 Z" fill="#17171c"/>
+                <circle cx="68" cy="62" r="25" fill="#17171c" stroke="#0d0d0f" stroke-width="4"/>
+                <g class="whl">
+                    <circle cx="68" cy="62" r="15.5" fill="none" stroke="#E10600" stroke-width="3.5" stroke-dasharray="49 49"/>
+                    <circle cx="68" cy="62" r="10" fill="#4a4a54" stroke="#0d0d0f" stroke-width="3"/>
+                    <g stroke="#17171c" stroke-width="2.4">
+                        <path d="M68 53 L68 71"/><path d="M60 57 L76 67"/><path d="M60 67 L76 57"/>
+                    </g>
+                </g>
+                <circle cx="238" cy="64" r="23" fill="#17171c" stroke="#0d0d0f" stroke-width="4"/>
+                <g class="whl">
+                    <circle cx="238" cy="64" r="14" fill="none" stroke="#E10600" stroke-width="3.5" stroke-dasharray="44 44"/>
+                    <circle cx="238" cy="64" r="9" fill="#4a4a54" stroke="#0d0d0f" stroke-width="3"/>
+                    <g stroke="#17171c" stroke-width="2.2">
+                        <path d="M238 56 L238 72"/><path d="M231 60 L245 68"/><path d="M231 68 L245 60"/>
+                    </g>
+                </g>
+                <g fill="#f4f4f6">
+                    <circle cx="120" cy="55" r="1.8"/><circle cx="127" cy="54" r="1.8"/>
+                    <circle cx="134" cy="53" r="1.8"/><circle cx="141" cy="52" r="1.8"/>
+                </g>
+                <path d="M206 42 L214 40 L214 44 L206 45 Z" fill="#17171c" stroke="#0d0d0f" stroke-width="2"/>
             </svg>
         </div>
     </div>
     <div class="loader-brand">Апекс</div>
 </div>
+
 <script>
     // Локальная разработка (localhost/127.0.0.1) — оставляем пусто, клиент падает на
     // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8090).
@@ -127,46 +251,55 @@
             ? ""
             : "https://summer-school-2026.onrender.com";
 
-    // window.load срабатывает до того, как реально догрузились .wasm-файлы (они фетчатся
-    // уже из кода volna-web.js) — поэтому спиннер гас раньше времени, оставляя пустой белый
-    // экран на секунды. Вместо этого следим за реальной загрузкой ресурсов через
-    // PerformanceObserver: скрываем оверлей, когда оба .wasm-файла (skiko + volna-web)
-    // фактически докачаны.
     (function () {
         var overlay = document.getElementById("loading-overlay");
-        var EXPECTED_WASM_FILES = 2;
+        var canvas = document.getElementById("compose-root");
+        var EXPECTED_WASM_FILES = 2;   // skiko.wasm + volna-web.wasm
         var wasmLoaded = 0;
-        var hidden = false;
+        var done = false;
 
-        function hideOverlay() {
-            if (hidden) return;
-            hidden = true;
-            // Скачать .wasm — не то же самое, что быть готовым к отрисовке: браузеру ещё
-            // нужно скомпилировать байткод (~13 МБ) и Compose должен нарисовать первый кадр.
-            // Это реальное время, не сетевая задержка — короткого буфера тут мало.
-            setTimeout(function () {
-                // Короткая вспышка клетчатого флага — сигнал "финиш", затем сам оверлей гаснет.
-                overlay.classList.add("finishing");
-                setTimeout(function () {
-                    overlay.classList.add("hidden");
-                }, 220);
-            }, 1200);
+        // Готовность определяем по двум РЕАЛЬНЫМ сигналам, а не по таймауту:
+        //   1) оба .wasm докачаны (PerformanceObserver) — window.load для этого не годится,
+        //      wasm фетчится уже из кода volna-web.js, после события load;
+        //   2) Skiko выставил размер буфера канваса (до инициализации там дефолт 300x150) —
+        //      значит движок поднялся и вот-вот отрисует первый кадр.
+        // Без второго шага оверлей гас раньше времени и оставался белый провал.
+        function finish() {
+            if (done) return;
+            done = true;
+            overlay.classList.add("finishing");
+            setTimeout(function () { overlay.classList.add("hidden"); }, 260);
+        }
+
+        function waitForFirstFrame() {
+            var start = performance.now();
+            (function check() {
+                var ready = canvas.width > 300 || canvas.height > 150;
+                if (ready) {
+                    // даём Compose дорисовать первый кадр, иначе поймаем пустой канвас
+                    setTimeout(finish, 350);
+                } else if (performance.now() - start > 10000) {
+                    finish();
+                } else {
+                    requestAnimationFrame(check);
+                }
+            })();
         }
 
         if (window.PerformanceObserver) {
             new PerformanceObserver(function (list) {
                 list.getEntries().forEach(function (entry) {
-                    if (entry.name.endsWith(".wasm")) {
-                        wasmLoaded++;
-                        if (wasmLoaded >= EXPECTED_WASM_FILES) hideOverlay();
+                    if (entry.name.endsWith(".wasm") && ++wasmLoaded >= EXPECTED_WASM_FILES) {
+                        waitForFirstFrame();
                     }
                 });
             }).observe({ type: "resource", buffered: true });
+        } else {
+            waitForFirstFrame();
         }
 
-        // Страховка: браузер без PerformanceObserver или неожиданное число wasm-файлов —
-        // спиннер не должен висеть вечно.
-        setTimeout(hideOverlay, 15000);
+        // Страховка: что-то пошло не так — прелоадер не должен висеть вечно.
+        setTimeout(finish, 20000);
     })();
 </script>
 <script src="skiko.js"></script>
