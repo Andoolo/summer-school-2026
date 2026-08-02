@@ -19,16 +19,24 @@
         }
 
         /* Прелоадер на время загрузки wasm-бандла (~13 МБ) — без него первые секунды
-           показывают пустой белый экран. */
+           показывают пустой белый экран. Болид едет по овалу трассы; когда приложение
+           готово — короткая вспышка клетчатого флага перед появлением интерфейса. */
         #loading-overlay {
             position: fixed;
             inset: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            gap: 16px;
             background: #ffffff;
             z-index: 10;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.3s ease, background-color 0.22s ease;
+        }
+
+        #loading-overlay.finishing {
+            background-image: repeating-conic-gradient(#161616 0% 25%, #ffffff 0% 50%);
+            background-size: 28px 28px;
         }
 
         #loading-overlay.hidden {
@@ -36,23 +44,80 @@
             pointer-events: none;
         }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e5e5;
-            border-top-color: #E10600;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        .loader-scene {
+            position: relative;
+            width: 200px;
+            height: 120px;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .track {
+            position: absolute;
+            inset: 0;
+        }
+
+        .kart-mover {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 34px;
+            height: 17px;
+            margin-top: -8.5px;
+            margin-left: -17px;
+            offset-path: path("M100,14 A86,46 0 1,1 100,106 A86,46 0 1,1 100,14 Z");
+            offset-rotate: auto;
+            animation: drive 2.4s linear infinite;
+        }
+
+        @keyframes drive {
+            from { offset-distance: 0%; }
+            to { offset-distance: 100%; }
+        }
+
+        .loader-brand {
+            font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+            font-weight: 900;
+            font-style: italic;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #161616;
+            font-size: 20px;
+        }
+
+        .loader-brand::after {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-left: 4px;
+            border-radius: 50%;
+            background: #E10600;
         }
     </style>
 </head>
 <body>
 <canvas id="compose-root"></canvas>
-<div id="loading-overlay"><div class="spinner"></div></div>
+<div id="loading-overlay">
+    <div class="loader-scene">
+        <svg class="track" viewBox="0 0 200 120" width="200" height="120">
+            <ellipse cx="100" cy="60" rx="86" ry="46" fill="none" stroke="#e5e5e5" stroke-width="3"/>
+            <ellipse cx="100" cy="60" rx="86" ry="46" fill="none" stroke="#E10600" stroke-width="3"
+                     stroke-dasharray="9 11" stroke-linecap="round"/>
+        </svg>
+        <div class="kart-mover">
+            <svg class="kart" viewBox="0 0 60 30" width="34" height="17">
+                <rect x="10" y="24" width="8" height="4" rx="1" fill="#1a1a1a"/>
+                <rect x="14" y="12" width="30" height="8" rx="3" fill="#2b2b2b"/>
+                <path d="M44 12 L52 16 L44 20 Z" fill="#E10600"/>
+                <circle cx="24" cy="8" r="5" fill="#1a1a1a"/>
+                <circle cx="20" cy="24" r="6" fill="#111111"/>
+                <circle cx="20" cy="24" r="2.5" fill="#666666"/>
+                <circle cx="42" cy="24" r="6" fill="#111111"/>
+                <circle cx="42" cy="24" r="2.5" fill="#666666"/>
+            </svg>
+        </div>
+    </div>
+    <div class="loader-brand">Апекс</div>
+</div>
 <script>
     // Локальная разработка (localhost/127.0.0.1) — оставляем пусто, клиент падает на
     // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8090).
@@ -80,7 +145,11 @@
             // нужно скомпилировать байткод (~13 МБ) и Compose должен нарисовать первый кадр.
             // Это реальное время, не сетевая задержка — короткого буфера тут мало.
             setTimeout(function () {
-                overlay.classList.add("hidden");
+                // Короткая вспышка клетчатого флага — сигнал "финиш", затем сам оверлей гаснет.
+                overlay.classList.add("finishing");
+                setTimeout(function () {
+                    overlay.classList.add("hidden");
+                }, 220);
             }, 1200);
         }
 
