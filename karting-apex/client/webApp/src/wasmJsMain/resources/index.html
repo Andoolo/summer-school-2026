@@ -76,9 +76,12 @@
         function hideOverlay() {
             if (hidden) return;
             hidden = true;
+            // Скачать .wasm — не то же самое, что быть готовым к отрисовке: браузеру ещё
+            // нужно скомпилировать байткод (~13 МБ) и Compose должен нарисовать первый кадр.
+            // Это реальное время, не сетевая задержка — короткого буфера тут мало.
             setTimeout(function () {
                 overlay.classList.add("hidden");
-            }, 200);
+            }, 1200);
         }
 
         if (window.PerformanceObserver) {
