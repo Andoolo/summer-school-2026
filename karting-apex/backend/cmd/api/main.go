@@ -18,6 +18,7 @@ import (
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/storage/postgres"
 	"summer-school-2026/backend/migrations"
+	"summer-school-2026/backend/seed"
 )
 
 func main() {
@@ -38,6 +39,14 @@ func main() {
 			os.Exit(1)
 		}
 		logger.Info("migrations applied")
+	}
+
+	if cfg.AutoSeed {
+		if err := postgres.SeedSQL(cfg.DatabaseURL, seed.KartingLapResults); err != nil {
+			logger.Error("failed to apply seed data", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("seed data applied")
 	}
 
 	db, err := postgres.Connect(ctx, cfg.DatabaseURL)

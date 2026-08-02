@@ -24,6 +24,10 @@ type Config struct {
 	// локальный workflow (make migrate) не меняется. Включается явно (AUTO_MIGRATE=true)
 	// для окружений вроде Render, где внешний доступ к БД для ручных миграций недоступен/нестабилен.
 	AutoMigrate bool
+	// AutoSeed включает применение демо-данных лидерборда (seed.KartingLapResults) программно
+	// при старте, тем же путём, что и AutoMigrate. Отдельный флаг: сид — не часть схемы, не
+	// нужен на каждом окружении (например, в тестах — только миграции).
+	AutoSeed bool
 }
 
 func Load() (Config, error) {
@@ -39,6 +43,7 @@ func Load() (Config, error) {
 		Dev:             boolFromEnvIsNot("APP_ENV", "production"),
 		AllowedOrigin:   stringFromEnv("ALLOWED_ORIGIN", ""),
 		AutoMigrate:     os.Getenv("AUTO_MIGRATE") == "true",
+		AutoSeed:        os.Getenv("AUTO_SEED") == "true",
 	}, nil
 }
 
