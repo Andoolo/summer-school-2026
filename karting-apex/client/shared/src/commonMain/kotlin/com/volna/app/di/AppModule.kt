@@ -19,6 +19,7 @@ import com.volna.app.catalog.data.KtorSlotRepository
 import com.volna.app.catalog.presentation.SlotDetailsStore
 import com.volna.app.catalog.presentation.SlotListStore
 import com.volna.app.core.config.AppConfig
+import com.volna.app.core.config.platformApiBaseUrl
 import com.volna.app.core.network.VolnaApiClient
 import com.volna.app.core.storage.PlatformSessionStorage
 import com.volna.app.core.storage.SessionStorage
@@ -44,7 +45,12 @@ val volnaAppModule = module {
     single<AppClock> { SystemAppClock }
     single<SessionStorage> { PlatformSessionStorage }
     single<SessionRepository> { DefaultSessionRepository(get()) }
-    single { VolnaApiClient(get()) }
+    single {
+        VolnaApiClient(
+            sessionRepository = get(),
+            baseUrl = platformApiBaseUrl() ?: VolnaApiClient.DEFAULT_BASE_URL,
+        )
+    }
 
     single<AuthRepository> { KtorAuthRepository(get(), get()) }
     single<ProfileRepository> { KtorProfileRepository(get(), get()) }

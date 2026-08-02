@@ -17,6 +17,7 @@ import (
 	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/storage/postgres"
+	"summer-school-2026/backend/migrations"
 )
 
 func main() {
@@ -30,6 +31,14 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.AutoMigrate {
+		if err := postgres.Migrate(cfg.DatabaseURL, migrations.FS); err != nil {
+			logger.Error("failed to apply migrations", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("migrations applied")
+	}
 
 	db, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -60,6 +69,7 @@ func main() {
 			Instructors:      instructorHandler,
 			RouteLeaderboard: slotHandler.Leaderboard,
 			Dev:              cfg.Dev,
+			AllowedOrigin:    cfg.AllowedOrigin,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
