@@ -7,7 +7,7 @@ VALUES
     ('c1000000-0000-0000-0000-000000000001', 'Иван',   '+79991000001'),
     ('c1000000-0000-0000-0000-000000000002', 'Ольга',  '+79991000002'),
     ('c1000000-0000-0000-0000-000000000003', 'Сергей', '+79991000003')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, phone = EXCLUDED.phone;
 
 INSERT INTO slots (id, route_id, instructor_id, start_at, total_seats, free_seats,
                    rental_boards_total, free_rental_boards, price, rental_price,
@@ -19,7 +19,22 @@ VALUES
     ('88888888-8888-8888-8888-888888888888', '22222222-2222-2222-2222-222222222222',
      '44444444-4444-4444-4444-444444444444', '2026-08-23 15:00:00+03',
      12, 10, 12, 12, 3200, 800, 'Паддок · трасса «Апекс»', 55.760, 37.630, 'scheduled')
-ON CONFLICT (id) DO NOTHING;
+-- DO UPDATE, а не DO NOTHING: иначе при уже существующем id (со старого запуска сида)
+-- новые значения (например, поправленная дата) молча игнорировались бы навсегда.
+ON CONFLICT (id) DO UPDATE SET
+    route_id = EXCLUDED.route_id,
+    instructor_id = EXCLUDED.instructor_id,
+    start_at = EXCLUDED.start_at,
+    total_seats = EXCLUDED.total_seats,
+    free_seats = EXCLUDED.free_seats,
+    rental_boards_total = EXCLUDED.rental_boards_total,
+    free_rental_boards = EXCLUDED.free_rental_boards,
+    price = EXCLUDED.price,
+    rental_price = EXCLUDED.rental_price,
+    meeting_point = EXCLUDED.meeting_point,
+    meeting_point_lat = EXCLUDED.meeting_point_lat,
+    meeting_point_lng = EXCLUDED.meeting_point_lng,
+    status = EXCLUDED.status;
 
 INSERT INTO bookings (id, slot_id, client_id, seats_count, rental_count, status, created_at)
 VALUES
@@ -28,12 +43,19 @@ VALUES
     ('aa100000-0000-0000-0000-000000000003', '77777777-7777-7777-7777-777777777777', 'c1000000-0000-0000-0000-000000000003', 1, 1, 'active', '2026-07-30 10:00:00+03'),
     ('aa200000-0000-0000-0000-000000000001', '88888888-8888-8888-8888-888888888888', 'c1000000-0000-0000-0000-000000000001', 1, 0, 'active', '2026-07-31 10:00:00+03'),
     ('aa200000-0000-0000-0000-000000000003', '88888888-8888-8888-8888-888888888888', 'c1000000-0000-0000-0000-000000000003', 1, 1, 'active', '2026-08-01 10:00:00+03')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    slot_id = EXCLUDED.slot_id,
+    client_id = EXCLUDED.client_id,
+    seats_count = EXCLUDED.seats_count,
+    rental_count = EXCLUDED.rental_count,
+    status = EXCLUDED.status,
+    created_at = EXCLUDED.created_at;
 
--- id указаны явно (а не gen_random_uuid() по умолчанию) и ON CONFLICT (id) DO NOTHING —
--- иначе при повторном запуске (каждый рестарт/редеплой с AUTO_SEED=true) строки бы
--- дублировались: без явного id "ON CONFLICT DO NOTHING" никогда не сработал бы,
--- т.к. конфликтовать не с чем (id всегда новый случайный).
+-- id указаны явно (а не gen_random_uuid() по умолчанию), иначе при повторном запуске
+-- (AUTO_SEED=true на каждом рестарте) строки бы дублировались — конфликтовать не с чем,
+-- т.к. id всегда новый случайный. Здесь оставлен DO NOTHING (не DO UPDATE, как выше для
+-- clients/slots/bookings) осознанно: время круга — свершившийся факт, задним числом
+-- не переписывается.
 INSERT INTO lap_results (id, booking_id, lap_number, lap_time_ms)
 VALUES
     -- Городское кольцо: Иван (лучший 42.318), Ольга (43.005), Сергей (41.890 — рекорд)
