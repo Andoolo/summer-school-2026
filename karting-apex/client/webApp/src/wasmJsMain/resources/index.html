@@ -51,9 +51,13 @@
         #loading-overlay.finishing .loader-box,
         #loading-overlay.finishing .loader-brand { opacity: 0; transition: opacity .12s ease; }
 
-        .loader-box { width: min(320px, 78vw); }
+        /* --p — прогресс заезда 0..1: общий источник и для положения болида,
+           и для заполнения трассы. Ведётся из JS (см. скрипт ниже), а не
+           ключевыми кадрами: длительность загрузки заранее неизвестна, поэтому
+           анимация не может быть зациклена по времени. */
+        .loader-box { width: min(320px, 78vw); --p: 0; }
 
-        /* --- стартовые огни --- */
+        /* --- стартовые огни: проигрываются один раз, гаснут = отмашка --- */
         .loader-lights {
             display: flex;
             gap: 7px;
@@ -67,18 +71,21 @@
             height: 10px;
             border-radius: 50%;
             background: #d4d4d8;
+            animation-duration: .75s;
+            animation-timing-function: linear;
+            animation-fill-mode: forwards;
         }
-        .loader-lights b:nth-child(1) { animation: lamp1 3.2s linear infinite }
-        .loader-lights b:nth-child(2) { animation: lamp2 3.2s linear infinite }
-        .loader-lights b:nth-child(3) { animation: lamp3 3.2s linear infinite }
-        .loader-lights b:nth-child(4) { animation: lamp4 3.2s linear infinite }
-        .loader-lights b:nth-child(5) { animation: lamp5 3.2s linear infinite }
+        .loader-lights b:nth-child(1) { animation-name: lamp1 }
+        .loader-lights b:nth-child(2) { animation-name: lamp2 }
+        .loader-lights b:nth-child(3) { animation-name: lamp3 }
+        .loader-lights b:nth-child(4) { animation-name: lamp4 }
+        .loader-lights b:nth-child(5) { animation-name: lamp5 }
 
-        @keyframes lamp1 { 0%,1%{background:#d4d4d8} 3%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
-        @keyframes lamp2 { 0%,4%{background:#d4d4d8} 6%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
-        @keyframes lamp3 { 0%,7%{background:#d4d4d8} 9%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
-        @keyframes lamp4 { 0%,10%{background:#d4d4d8} 12%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
-        @keyframes lamp5 { 0%,13%{background:#d4d4d8} 14%,15%{background:#E10600} 17%,100%{background:#d4d4d8} }
+        @keyframes lamp1 { 0%,8%{background:#d4d4d8}  12%,74%{background:#E10600} 78%,100%{background:#d4d4d8} }
+        @keyframes lamp2 { 0%,20%{background:#d4d4d8} 24%,74%{background:#E10600} 78%,100%{background:#d4d4d8} }
+        @keyframes lamp3 { 0%,32%{background:#d4d4d8} 36%,74%{background:#E10600} 78%,100%{background:#d4d4d8} }
+        @keyframes lamp4 { 0%,44%{background:#d4d4d8} 48%,74%{background:#E10600} 78%,100%{background:#d4d4d8} }
+        @keyframes lamp5 { 0%,56%{background:#d4d4d8} 60%,74%{background:#E10600} 78%,100%{background:#d4d4d8} }
 
         /* --- трасса --- */
         .loader-track { position: relative; }
@@ -112,19 +119,21 @@
         .loader-fill {
             position: absolute;
             inset: 0 auto 0 0;
-            width: 0;
+            width: calc(100% * var(--p));
             overflow: hidden;
             background: linear-gradient(90deg, rgba(225,6,0,.25), rgba(225,6,0,.75));
-            animation: fillAcross 3.2s cubic-bezier(.45,.05,.35,1) infinite;
         }
-        /* клетка «догоняет» болид ко второй половине круга */
+        /* клетка налетает только на финишном рывке — как надвигающаяся финишная черта */
         .loader-fill::after {
             content: "";
             position: absolute;
             inset: 0;
             background-image: repeating-conic-gradient(#161616 0 25%, #fff 0 50%);
             background-size: 13px 13px;
-            animation: flagWipe 3.2s cubic-bezier(.45,.05,.35,1) infinite;
+            clip-path: inset(0 100% 0 0);
+        }
+        #loading-overlay.finish .loader-fill::after {
+            animation: flagWipe .43s cubic-bezier(.33,0,.2,1) forwards;
         }
 
         /* --- болид ---
@@ -134,25 +143,24 @@
         .loader-kart {
             position: absolute;
             bottom: 16px;
-            left: 0;
+            /* нос болида приходит ровно на финишную черту при --p = 1 */
+            left: calc((100% - 132px) * var(--p));
             width: 132px;
             height: auto;
             z-index: 4;
-            animation: driveAcross 3.2s cubic-bezier(.45,.05,.35,1) infinite,
-                       kartShake .09s linear infinite;
+            animation: kartShake .09s linear infinite;
         }
-        /* колёса стоят на старте и раскручиваются вместе с рывком с места */
+        /* колёса стоят на решётке и раскручиваются после отмашки */
         .loader-kart .whl {
             transform-box: fill-box;
             transform-origin: center;
-            animation: wheelSpin 3.2s cubic-bezier(.45,.05,.35,1) infinite;
+            animation: wheelSpin .5s linear .59s infinite;
         }
+        #loading-overlay.finish .loader-kart .whl { animation-duration: .17s }
 
-        @keyframes driveAcross { 0%,18%{ left:0 } 92%,100%{ left:calc(100% - 132px) } }
-        @keyframes fillAcross  { 0%,18%{ width:0 } 92%,100%{ width:100% } }
-        @keyframes flagWipe    { 0%,64%{ clip-path:inset(0 100% 0 0) } 92%,100%{ clip-path:inset(0 0 0 0) } }
-        @keyframes wheelSpin   { 0%,18%{ transform:rotate(0) } 100%{ transform:rotate(1440deg) } }
-        @keyframes kartShake   { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-.6px) } }
+        @keyframes flagWipe  { to { clip-path: inset(0 0 0 0) } }
+        @keyframes wheelSpin { to { transform: rotate(360deg) } }
+        @keyframes kartShake { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-.6px) } }
 
         .loader-brand {
             font-family: -apple-system, "Segoe UI", Arial, sans-serif;
@@ -174,8 +182,9 @@
 
         @media (prefers-reduced-motion: reduce) {
             .loader-lights b, .loader-kart, .loader-kart .whl,
-            .loader-fill, .loader-fill::after { animation: none }
-            .loader-fill { width: 60% }
+            #loading-overlay.finish .loader-fill::after { animation: none }
+            .loader-lights b { background: #E10600 }
+            #loading-overlay.finish .loader-fill::after { clip-path: inset(0 0 0 0) }
         }
     </style>
 </head>
@@ -253,10 +262,56 @@
 
     (function () {
         var overlay = document.getElementById("loading-overlay");
+        var box = document.querySelector(".loader-box");
         var canvas = document.getElementById("compose-root");
-        var EXPECTED_WASM_FILES = 2;   // skiko.wasm + volna-web.wasm
-        var wasmLoaded = 0;
-        var done = false;
+
+        var LAUNCH_MS = 585;   // огни погасли — можно ехать (78% от их 750мс)
+        var MIN_SHOW_MS = 950; // из кеша грузится мгновенно — не мигаем прелоадером
+        var SPRINT_MS = 430;   // рывок от текущей точки до финишной черты
+        var CEIL = 0.85;       // предел заезда, пока готовность не подтверждена
+        var TAU = 2.4;         // постоянная времени подхода к пределу, сек
+
+        // Длительность загрузки заранее неизвестна, поэтому «доехать ровно к концу»
+        // по таймеру нельзя. Вместо этого болид асимптотически подползает к 85%
+        // трассы и ждёт там, а реальный сигнал готовности переводит его в рывок
+        // через финишную черту. Цикла нет: заезд всегда заканчивается один раз и
+        // ровно в тот момент, когда приложение готово.
+        var t0 = performance.now();
+        var p = 0, sprinting = false, sprintFrom = 0, sprintAt = 0;
+        var ready = false, done = false;
+
+        function frame(now) {
+            var elapsed = now - t0;
+
+            if (sprinting) {
+                var k = Math.min(1, (now - sprintAt) / SPRINT_MS);
+                p = sprintFrom + (1 - sprintFrom) * (1 - Math.pow(1 - k, 3));
+                box.style.setProperty("--p", p.toFixed(4));
+                if (k >= 1) { crossLine(); return; }
+            } else {
+                if (elapsed > LAUNCH_MS) {
+                    p = CEIL * (1 - Math.exp(-((elapsed - LAUNCH_MS) / 1000) / TAU));
+                    box.style.setProperty("--p", p.toFixed(4));
+                }
+                if (ready && elapsed >= MIN_SHOW_MS) {
+                    sprinting = true;
+                    sprintFrom = p;
+                    sprintAt = now;
+                    overlay.classList.add("finish");
+                }
+            }
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+
+        function markReady() { ready = true; }
+
+        function crossLine() {
+            if (done) return;
+            done = true;
+            overlay.classList.add("finishing");
+            setTimeout(function () { overlay.classList.add("hidden"); }, 240);
+        }
 
         // Готовность определяем по двум РЕАЛЬНЫМ сигналам, а не по таймауту:
         //   1) оба .wasm докачаны (PerformanceObserver) — window.load для этого не годится,
@@ -264,32 +319,24 @@
         //   2) Skiko выставил размер буфера канваса (до инициализации там дефолт 300x150) —
         //      значит движок поднялся и вот-вот отрисует первый кадр.
         // Без второго шага оверлей гас раньше времени и оставался белый провал.
-        function finish() {
-            if (done) return;
-            done = true;
-            overlay.classList.add("finishing");
-            setTimeout(function () { overlay.classList.add("hidden"); }, 260);
-        }
-
         function waitForFirstFrame() {
             var start = performance.now();
             (function check() {
-                var ready = canvas.width > 300 || canvas.height > 150;
-                if (ready) {
-                    // даём Compose дорисовать первый кадр, иначе поймаем пустой канвас
-                    setTimeout(finish, 350);
+                if (canvas.width > 300 || canvas.height > 150) {
+                    setTimeout(markReady, 300); // дать Compose дорисовать первый кадр
                 } else if (performance.now() - start > 10000) {
-                    finish();
+                    markReady();
                 } else {
                     requestAnimationFrame(check);
                 }
             })();
         }
 
+        var wasmLoaded = 0;
         if (window.PerformanceObserver) {
             new PerformanceObserver(function (list) {
                 list.getEntries().forEach(function (entry) {
-                    if (entry.name.endsWith(".wasm") && ++wasmLoaded >= EXPECTED_WASM_FILES) {
+                    if (entry.name.endsWith(".wasm") && ++wasmLoaded >= 2) {
                         waitForFirstFrame();
                     }
                 });
@@ -299,7 +346,7 @@
         }
 
         // Страховка: что-то пошло не так — прелоадер не должен висеть вечно.
-        setTimeout(finish, 20000);
+        setTimeout(markReady, 20000);
     })();
 </script>
 <script src="skiko.js"></script>
