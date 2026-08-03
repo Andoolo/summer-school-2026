@@ -31,7 +31,7 @@ func TestListBookingsSortOrder(t *testing.T) {
 	clientID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	insertClientSession(t, ctx, db, clientID, "+79990005001", token)
 
-	routeID := "11111111-1111-1111-1111-111111111111"       // из dev-seed
+	routeID := "11111111-1111-1111-1111-111111111111"      // из dev-seed
 	instructorID := "33333333-3333-3333-3333-333333333333" // из dev-seed
 
 	// slotID -> смещение start_at от now
