@@ -28,6 +28,11 @@ type Config struct {
 	// при старте, тем же путём, что и AutoMigrate. Отдельный флаг: сид — не часть схемы, не
 	// нужен на каждом окружении (например, в тестах — только миграции).
 	AutoSeed bool
+	// MarshalToken — общий секрет для внесения времён кругов маршалом (F6).
+	// ПУСТО ОЗНАЧАЕТ, ЧТО ФУНКЦИЯ ВЫКЛЮЧЕНА ЦЕЛИКОМ: эндпоинт не регистрируется.
+	// Так открытую запись в чужие результаты нельзя оставить по недосмотру —
+	// её нужно включить осознанно, задав переменную окружения.
+	MarshalToken string
 }
 
 func Load() (Config, error) {
@@ -44,6 +49,7 @@ func Load() (Config, error) {
 		AllowedOrigin:   stringFromEnv("ALLOWED_ORIGIN", ""),
 		AutoMigrate:     os.Getenv("AUTO_MIGRATE") == "true",
 		AutoSeed:        os.Getenv("AUTO_SEED") == "true",
+		MarshalToken:    stringFromEnv("MARSHAL_TOKEN", ""),
 	}, nil
 }
 

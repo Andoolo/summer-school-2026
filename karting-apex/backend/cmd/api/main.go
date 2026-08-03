@@ -64,22 +64,32 @@ func main() {
 	profileHandler := handlers.NewProfileHandler(profileService)
 	bookingService := booking.NewService(postgres.NewBookingRepository(db))
 	bookingHandler := handlers.NewBookingHandler(bookingService)
-	slotHandler := handlers.NewSlotHandler(postgres.NewSlotRepository(db))
+	slotRepo := postgres.NewSlotRepository(db)
+	slotHandler := handlers.NewSlotHandler(slotRepo)
+
+	// Внесение результатов маршалом включается только явным MARSHAL_TOKEN.
+	// Пусто — обработчик не создаётся и маршрут не регистрируется.
+	var marshalLapResults http.HandlerFunc
+	if cfg.MarshalToken != "" {
+		marshalLapResults = handlers.NewMarshalHandler(slotRepo, cfg.MarshalToken).SubmitLapResults
+		logger.Info("marshal lap entry enabled")
+	}
 	instructorHandler := handlers.NewInstructorHandler(postgres.NewInstructorRepository(db))
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(logger, httpapi.RouterOptions{
-			Auth:             authHandler,
-			AuthRefresh:      authHandler.Refresh,
-			Profile:          profileHandler,
-			Bookings:         bookingHandler,
-			Slots:            slotHandler,
-			Instructors:      instructorHandler,
-			RouteLeaderboard: slotHandler.Leaderboard,
-			RoutePassport:    slotHandler.TrackPassport,
-			Dev:              cfg.Dev,
-			AllowedOrigin:    cfg.AllowedOrigin,
+			Auth:              authHandler,
+			AuthRefresh:       authHandler.Refresh,
+			Profile:           profileHandler,
+			Bookings:          bookingHandler,
+			Slots:             slotHandler,
+			Instructors:       instructorHandler,
+			RouteLeaderboard:  slotHandler.Leaderboard,
+			RoutePassport:     slotHandler.TrackPassport,
+			MarshalLapResults: marshalLapResults,
+			Dev:               cfg.Dev,
+			AllowedOrigin:     cfg.AllowedOrigin,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

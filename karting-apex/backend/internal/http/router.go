@@ -30,6 +30,11 @@ type RouterOptions struct {
 	RouteLeaderboard http.HandlerFunc
 	// RoutePassport — ручной маршрут GET /routes/{routeID} (карточка трассы, картинг F5).
 	RoutePassport http.HandlerFunc
+	// MarshalLapResults — ручной маршрут POST /bookings/{bookingID}/lap-results
+	// (внесение времён кругов маршалом, картинг F6). nil — маршрут не регистрируется
+	// вовсе: без заданного MARSHAL_TOKEN функция должна быть недоступна, а не просто
+	// отвечать отказом.
+	MarshalLapResults http.HandlerFunc
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
@@ -81,6 +86,9 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.RoutePassport != nil {
 		router.Get("/routes/{routeID}", opts.RoutePassport)
+	}
+	if opts.MarshalLapResults != nil {
+		router.Post("/bookings/{bookingID}/lap-results", opts.MarshalLapResults)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})

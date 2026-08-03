@@ -298,6 +298,79 @@ WHERE rt.id = $1`, routeID).Scan(
 	return p, true, nil
 }
 
+// LapEntryTarget — заезд, в который маршал вносит времена кругов (F6).
+type LapEntryTarget struct {
+	BookingID    string
+	BookingState string
+	ClientName   string
+	RouteID      string
+	RouteName    string
+	SlotStartAt  time.Time
+}
+
+// BookingForLapEntry находит бронь и контекст, нужный для проверок перед записью
+// результатов. Второе значение — false, если брони с таким id нет.
+func (r *SlotRepository) BookingForLapEntry(ctx context.Context, bookingID string) (LapEntryTarget, bool, error) {
+	var t LapEntryTarget
+	err := r.db.QueryRow(ctx, `
+SELECT b.id::text, b.status, COALESCE(c.name, 'Гонщик'), rt.id::text, rt.name, s.start_at
+FROM bookings b
+JOIN slots s ON s.id = b.slot_id
+JOIN routes rt ON rt.id = s.route_id
+JOIN clients c ON c.id = b.client_id
+WHERE b.id = $1`, bookingID).Scan(
+		&t.BookingID, &t.BookingState, &t.ClientName, &t.RouteID, &t.RouteName, &t.SlotStartAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return LapEntryTarget{}, false, nil
+	}
+	if err != nil {
+		return LapEntryTarget{}, false, fmt.Errorf("get booking for lap entry: %w", err)
+	}
+	return t, true, nil
+}
+
+// ReplaceLapResults полностью заменяет времена кругов брони на переданные.
+//
+// Именно замена, а не добавление: маршал вносит результаты заезда целиком и может
+// исправить опечатку, отправив список заново. При добавлении повторная отправка
+// удвоила бы круги и испортила таблицу рекордов.
+//
+// Возвращает лучший круг по трассе ДО этой записи — по нему видно, побит ли рекорд.
+func (r *SlotRepository) ReplaceLapResults(ctx context.Context, bookingID, routeID string, lapTimesMs []int) (previousBestMs *int, err error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin replace lap results: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var best *int
+	if err := tx.QueryRow(ctx, `
+SELECT MIN(lr.lap_time_ms)
+FROM lap_results lr
+JOIN bookings b ON b.id = lr.booking_id
+JOIN slots s ON s.id = b.slot_id
+WHERE s.route_id = $1`, routeID).Scan(&best); err != nil {
+		return nil, fmt.Errorf("read previous best lap: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM lap_results WHERE booking_id = $1`, bookingID); err != nil {
+		return nil, fmt.Errorf("clear lap results: %w", err)
+	}
+	for i, ms := range lapTimesMs {
+		if _, err := tx.Exec(ctx, `
+INSERT INTO lap_results (booking_id, lap_number, lap_time_ms) VALUES ($1, $2, $3)`,
+			bookingID, i+1, ms); err != nil {
+			return nil, fmt.Errorf("insert lap %d: %w", i+1, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit replace lap results: %w", err)
+	}
+	return best, nil
+}
+
 func slotWhere(filters SlotFilters) (string, []any) {
 	conditions := make([]string, 0)
 	args := make([]any, 0)
