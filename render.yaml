@@ -1,0 +1,78 @@
+# Инфраструктура «Апекса» на Render, описанная кодом.
+#
+# ВАЖНО: живые сервисы созданы вручную через веб-панель до появления этого файла,
+# и Render ими по нему НЕ управляет. Файл выполняет две задачи:
+#   1) документирует фактическую конфигурацию — её больше не нужно собирать по
+#      скриншотам и вкладкам панели;
+#   2) позволяет развернуть всё окружение заново одной кнопкой (Blueprint), если
+#      сервисы придётся пересоздавать — например, когда истечёт срок бесплатной базы.
+#
+# Подключение существующих сервисов к Blueprint потребует их пересоздания, а значит
+# смены публичных адресов. Поэтому пока файл живёт как описание, а не как источник
+# истины. Разворачивать по нему имеет смысл только на чистом окружении.
+#
+# Секретов здесь нет и быть не должно: строка подключения к базе подставляется
+# самим Render через fromDatabase, остальное — несекретные настройки.
+
+databases:
+  - name: apex-db
+    databaseName: apex
+    user: apex
+    plan: free
+    region: frankfurt
+    # Бесплатная база Render живёт 30 дней с момента создания, потом 14 дней
+    # grace-периода. Восстановление после пересоздания автоматическое: приложение
+    # само накатит миграции и демо-данные (AUTO_MIGRATE / AUTO_SEED ниже).
+
+services:
+  # ---------- Бэкенд: Go API в Docker ----------
+  - type: web
+    name: summer-school-2026
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    rootDir: karting-apex/backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: apex-db
+          property: connectionString
+      # Без production выдача OTP-кода в ответе API остаётся включённой — это
+      # ровно та утечка, которую чинил баг B1.
+      - key: APP_ENV
+        value: production
+      # Render по умолчанию ждёт приложение на 10000, а сервис слушает 8080.
+      - key: PORT
+        value: 8080
+      # Миграции и демо-данные применяются самим приложением при старте: внешний
+      # доступ к базе Render из локальной среды нестабилен, а внутренняя сеть
+      # работает быстро и предсказуемо.
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: AUTO_SEED
+        value: "true"
+      # Точный источник, которому разрешён CORS. Пусто — CORS в production выключен.
+      - key: ALLOWED_ORIGIN
+        value: https://apex-web-t7ii.onrender.com
+
+  # ---------- Фронтенд: статика, собранная из Kotlin/Wasm ----------
+  - type: web
+    name: apex-web
+    runtime: static
+    branch: main
+    rootDir: karting-apex/client
+    # JDK ставится в рабочую директорию, а не в систему: файловая система
+    # build-окружения статики только для чтения, и apt-get там не работает.
+    buildCommand: >-
+      curl -sL https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse -o jdk17.tar.gz &&
+      mkdir -p .jdk17 &&
+      tar -xzf jdk17.tar.gz -C .jdk17 --strip-components=1 &&
+      export JAVA_HOME="$PWD/.jdk17" &&
+      export PATH="$JAVA_HOME/bin:$PATH" &&
+      ./gradlew :webApp:wasmJsBrowserDistribution --no-daemon
+    staticPublishPath: webApp/build/dist/wasmJs/productionExecutable
