@@ -47,10 +47,16 @@ fun TrackMinimap(
     modifier: Modifier = Modifier,
     height: Dp = 156.dp,
     cornerRadius: Dp = 12.dp,
+    trackWidth: Dp = 11.dp,
+    padding: Dp = 18.dp,
+    meetingPoint: GeoPoint? = null,
 ) {
     if (points.size < 2) return
 
-    val prepared = remember(points) { prepareMinimap(points) } ?: return
+    // Точка сбора участвует в расчёте границ, иначе пин мог бы оказаться за краем схемы.
+    val prepared = remember(points, meetingPoint) {
+        prepareMinimap(points + listOfNotNull(meetingPoint))
+    } ?: return
 
     Canvas(
         modifier = modifier
@@ -58,11 +64,13 @@ fun TrackMinimap(
             .height(height)
             .background(BackgroundColor, RoundedCornerShape(cornerRadius)),
     ) {
-        val projected = prepared.toCanvas(
+        val all = prepared.toCanvas(
             width = size.width,
             height = size.height,
-            padding = 18.dp.toPx(),
+            padding = padding.toPx(),
         )
+        // Последняя спроецированная точка — точка сбора, в контур трассы она не входит.
+        val projected = if (meetingPoint != null) all.dropLast(1) else all
         if (projected.size < 2) return@Canvas
 
         val path = Path().apply {
@@ -76,7 +84,7 @@ fun TrackMinimap(
         drawPath(
             path = path,
             color = AsphaltColor,
-            style = Stroke(width = 11.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = trackWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
         drawPath(
             path = path,
@@ -92,7 +100,18 @@ fun TrackMinimap(
         )
 
         drawStartFinishLine(from = projected.first(), to = projected[1])
+
+        if (meetingPoint != null) {
+            drawMeetingPin(all.last())
+        }
     }
+}
+
+/** Пин точки сбора: куда подъезжать. К контуру трассы отношения не имеет. */
+private fun DrawScope.drawMeetingPin(center: Offset) {
+    drawCircle(color = KerbRedColor.copy(alpha = 0.16f), radius = 22.dp.toPx(), center = center)
+    drawCircle(color = KerbRedColor, radius = 7.dp.toPx(), center = center)
+    drawCircle(color = Color.White, radius = 3.dp.toPx(), center = center)
 }
 
 /** Клетчатая линия старт-финиш поперёк полотна в начале круга. */

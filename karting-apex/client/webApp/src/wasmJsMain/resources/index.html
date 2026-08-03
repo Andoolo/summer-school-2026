@@ -263,7 +263,6 @@
     (function () {
         var overlay = document.getElementById("loading-overlay");
         var box = document.querySelector(".loader-box");
-        var canvas = document.getElementById("compose-root");
 
         var LAUNCH_MS = 585;   // огни погасли — можно ехать (78% от их 750мс)
         var MIN_SHOW_MS = 950; // из кеша грузится мгновенно — не мигаем прелоадером
@@ -316,20 +315,29 @@
         // Готовность определяем по двум РЕАЛЬНЫМ сигналам, а не по таймауту:
         //   1) оба .wasm докачаны (PerformanceObserver) — window.load для этого не годится,
         //      wasm фетчится уже из кода volna-web.js, после события load;
-        //   2) Skiko выставил размер буфера канваса (до инициализации там дефолт 300x150) —
-        //      значит движок поднялся и вот-вот отрисует первый кадр.
-        // Без второго шага оверлей гас раньше времени и оставался белый провал.
-        function waitForFirstFrame() {
-            var start = performance.now();
-            (function check() {
-                if (canvas.width > 300 || canvas.height > 150) {
-                    setTimeout(markReady, 300); // дать Compose дорисовать первый кадр
-                } else if (performance.now() - start > 10000) {
+        //   2) пошли ровные кадры анимации. Пока браузер компилирует ~13 МБ wasm, главный
+        //      поток заблокирован и requestAnimationFrame не вызывается; как только кадры
+        //      идут стабильно — компиляция позади и Compose рисует.
+        //
+        // Размер буфера канваса как сигнал не годится: Skiko рендерит через WebGL2 и
+        // оставляет атрибуты canvas дефолтными (300x150), масштабируя через CSS, —
+        // проверка на изменение размера не срабатывала никогда.
+        function waitForSteadyFrames() {
+            var startedAt = performance.now();
+            var previous = startedAt;
+            var steady = 0;
+
+            requestAnimationFrame(function tick(now) {
+                var delta = now - previous;
+                previous = now;
+                steady = delta < 50 ? steady + 1 : 0;
+
+                if (steady >= 8 || now - startedAt > 12000) {
                     markReady();
-                } else {
-                    requestAnimationFrame(check);
+                    return;
                 }
-            })();
+                requestAnimationFrame(tick);
+            });
         }
 
         var wasmLoaded = 0;
@@ -337,12 +345,12 @@
             new PerformanceObserver(function (list) {
                 list.getEntries().forEach(function (entry) {
                     if (entry.name.endsWith(".wasm") && ++wasmLoaded >= 2) {
-                        waitForFirstFrame();
+                        waitForSteadyFrames();
                     }
                 });
             }).observe({ type: "resource", buffered: true });
         } else {
-            waitForFirstFrame();
+            waitForSteadyFrames();
         }
 
         // Страховка: что-то пошло не так — прелоадер не должен висеть вечно.
