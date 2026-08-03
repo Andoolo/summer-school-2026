@@ -89,9 +89,11 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: ${{ matrix.dir }}/go.sum
 
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          # Версия закреплена намеренно: с 'latest' экшен подтянул сборку на go1.24,
+          # а проект целится в go1.25 — линтер отказывается читать такой модуль.
+          version: v2.12.2
           working-directory: ${{ matrix.dir }}
 
   client:
