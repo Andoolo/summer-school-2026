@@ -15,7 +15,9 @@ import (
 // миграции идут через то же DATABASE_URL, что и всё приложение, и в средах вроде Render
 // выполняются через быструю внутреннюю сеть, а не через внешнее подключение.
 func Migrate(databaseURL string, migrationsFS embed.FS) error {
-	db, err := sql.Open("pgx", databaseURL)
+	// Простой протокол — см. withSimpleProtocol: с кэшем подготовленных запросов
+	// миграции не проходят на управляемом Postgres за прокси.
+	db, err := sql.Open("pgx", withSimpleProtocol(databaseURL))
 	if err != nil {
 		return fmt.Errorf("open db for migrations: %w", err)
 	}
