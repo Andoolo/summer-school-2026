@@ -1,6 +1,7 @@
 package com.volna.app
 
 import com.volna.app.domain.model.BookingId
+import com.volna.app.domain.model.RouteId
 import com.volna.app.domain.model.SlotId
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -33,6 +34,10 @@ internal data class SlotDetailsDestination(val slotId: String)
 internal data class SlotBookingDestination(val slotId: String)
 
 @Serializable
+@SerialName("track")
+internal data class TrackDestination(val routeId: String)
+
+@Serializable
 @SerialName("bookings")
 internal data object BookingsDestination
 
@@ -47,6 +52,8 @@ internal data object ProfileDestination
 internal fun SlotDetailsDestination.slotId(): SlotId = SlotId(slotId)
 
 internal fun SlotBookingDestination.slotId(): SlotId = SlotId(slotId)
+
+internal fun TrackDestination.routeId(): RouteId = RouteId(routeId)
 
 internal fun BookingDetailsDestination.bookingId(): BookingId = BookingId(bookingId)
 

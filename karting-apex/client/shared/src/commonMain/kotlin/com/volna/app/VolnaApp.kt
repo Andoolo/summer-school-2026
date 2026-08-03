@@ -50,6 +50,7 @@ fun VolnaApp() {
         val bookingFormStore = koinViewModel<BookingFormStore>()
         val bookingListStore = koinViewModel<BookingListStore>()
         val bookingDetailsStore = koinViewModel<BookingDetailsStore>()
+        val trackStore = koinViewModel<TrackStore>()
         val authState by authStore.state.collectAsState()
         val profileState by profileStore.state.collectAsState()
         val slotListState by slotListStore.state.collectAsState()
@@ -57,6 +58,7 @@ fun VolnaApp() {
         val bookingFormState by bookingFormStore.state.collectAsState()
         val bookingListState by bookingListStore.state.collectAsState()
         val bookingDetailsState by bookingDetailsStore.state.collectAsState()
+        val trackState by trackStore.state.collectAsState()
         var rootState by remember { mutableStateOf(RootState.CheckingSession) }
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = backStackEntry?.destination
@@ -72,6 +74,7 @@ fun VolnaApp() {
             bookingFormStore.accept(BookingFormIntent.Reset)
             bookingListStore.accept(BookingListIntent.Reset)
             bookingDetailsStore.accept(BookingDetailsIntent.Reset)
+            trackStore.accept(TrackIntent.Reset)
             rootState = RootState.Ready
             navController.navigate(AuthDestination) {
                 popUpTo(navController.graph.findStartDestination().id) {
@@ -96,6 +99,7 @@ fun VolnaApp() {
                 profileState.deleteConfirmVisible -> true
                 currentDestination?.hasRoute<SlotBookingDestination>() == true -> true
                 currentDestination?.hasRoute<SlotDetailsDestination>() == true -> true
+                currentDestination?.hasRoute<TrackDestination>() == true -> true
                 currentDestination?.hasRoute<BookingDetailsDestination>() == true -> true
                 currentDestination?.hasRoute<ProfileDestination>() == true &&
                     profileState.mode == ProfileMode.ConfirmPhone -> true
@@ -161,6 +165,11 @@ fun VolnaApp() {
                 }
 
                 currentDestination?.hasRoute<SlotDetailsDestination>() == true -> {
+                    navController.popBackStack()
+                    true
+                }
+
+                currentDestination?.hasRoute<TrackDestination>() == true -> {
                     navController.popBackStack()
                     true
                 }
@@ -264,6 +273,14 @@ fun VolnaApp() {
             }
         }
 
+        LaunchedEffect(trackStore) {
+            while (true) {
+                when (trackStore.effects()) {
+                    TrackEffect.SignedOut -> resetToAuth()
+                }
+            }
+        }
+
         LaunchedEffect(bookingFormStore) {
             while (true) {
                 when (bookingFormStore.effects()) {
@@ -298,6 +315,8 @@ fun VolnaApp() {
                 onSlotListIntent = slotListStore::accept,
                 slotDetailsState = slotDetailsState,
                 onSlotDetailsIntent = slotDetailsStore::accept,
+                trackState = trackState,
+                onTrackIntent = trackStore::accept,
                 bookingFormState = bookingFormState,
                 onBookingFormIntent = bookingFormStore::accept,
                 bookingListState = bookingListState,

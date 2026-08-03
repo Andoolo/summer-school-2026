@@ -17,6 +17,7 @@ import com.volna.app.catalog.SlotRepository
 import com.volna.app.catalog.data.KtorInstructorRepository
 import com.volna.app.catalog.data.KtorSlotRepository
 import com.volna.app.catalog.presentation.SlotDetailsStore
+import com.volna.app.catalog.presentation.TrackStore
 import com.volna.app.catalog.presentation.SlotListStore
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.config.platformApiBaseUrl
@@ -63,6 +64,7 @@ val volnaAppModule = module {
     viewModel { ProfileStore(get(), get()) }
     viewModel { SlotListStore(get(), get()) }
     viewModel { SlotDetailsStore(get()) }
+    viewModel { TrackStore(get()) }
     viewModel { BookingFormStore(get(), get()) }
     viewModel { BookingListStore(get(), get()) }
     viewModel { BookingDetailsStore(get(), get()) }

@@ -1,6 +1,8 @@
 package com.volna.app.catalog.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.map.TrackMinimap
 import com.volna.app.core.ui.Loadable
+import com.volna.app.domain.model.RouteId
 import com.volna.app.domain.model.Slot
 import com.volna.app.domain.model.SlotId
 import com.volna.app.domain.policy.AvailabilityPolicy
@@ -38,6 +41,7 @@ fun SlotDetailsScreen(
     onIntent: (SlotDetailsIntent) -> Unit,
     onBack: () -> Unit,
     onBook: (Slot) -> Unit,
+    onOpenTrack: (RouteId) -> Unit,
 ) {
     LaunchedEffect(slotId) {
         onIntent(SlotDetailsIntent.Load(slotId))
@@ -57,6 +61,7 @@ fun SlotDetailsScreen(
                 onBack = onBack,
                 onBook = { onBook(slot.value) },
                 onOpenMap = { onIntent(SlotDetailsIntent.OpenRouteMap) },
+                onOpenTrack = { onOpenTrack(slot.value.route.id) },
             )
             is Loadable.Empty -> StateMessage(
                 title = "Заезд недоступен",
@@ -90,6 +95,7 @@ private fun SlotDetailsContent(
     onBack: () -> Unit,
     onBook: () -> Unit,
     onOpenMap: () -> Unit,
+    onOpenTrack: () -> Unit,
 ) {
     val availability = AvailabilityPolicy.availability(slot)
     Column(Modifier.fillMaxSize()) {
@@ -124,6 +130,7 @@ private fun SlotDetailsContent(
             leaderboard = leaderboard,
             onBook = onBook,
             onOpenMap = onOpenMap,
+            onOpenTrack = onOpenTrack,
         )
     }
 }
@@ -164,6 +171,7 @@ private fun SlotDetailsSheetContent(
     leaderboard: List<com.volna.app.domain.model.LeaderboardEntry>,
     onBook: () -> Unit,
     onOpenMap: () -> Unit,
+    onOpenTrack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -220,7 +228,7 @@ private fun SlotDetailsSheetContent(
             }
         }
         item {
-            SlotDetailsMapCard(slot = slot, onOpenMap = onOpenMap)
+            SlotDetailsMapCard(slot = slot, onOpenMap = onOpenMap, onOpenTrack = onOpenTrack)
         }
         item {
             Column(
@@ -284,6 +292,7 @@ private fun SlotDetailsSheetContent(
 private fun SlotDetailsMapCard(
     slot: Slot,
     onOpenMap: () -> Unit,
+    onOpenTrack: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -302,7 +311,17 @@ private fun SlotDetailsMapCard(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        TrackMinimap(points = slot.route.geometry?.points.orEmpty())
+        TrackMinimap(
+            points = slot.route.geometry?.points.orEmpty(),
+            modifier = Modifier.clickable { onOpenTrack() },
+        )
+        Text(
+            text = "О трассе",
+            modifier = Modifier.clickable { onOpenTrack() },
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = VolnaTheme.tokens.colors.brand,
+        )
         Text(
             text = "Открыть карту",
             modifier = Modifier.clickable { onOpenMap() },
@@ -312,8 +331,30 @@ private fun SlotDetailsMapCard(
     }
 }
 
+/**
+ * Клетчатый флажок, нарисованный вручную. Эмодзи 🏁 использовать нельзя: в wasm-сборке
+ * такого глифа в шрифте нет, и вместо флага показывался пустой квадрат.
+ */
 @Composable
-private fun DetailsInfoRow(
+private fun CheckeredFlagMark(size: androidx.compose.ui.unit.Dp = 14.dp) {
+    Canvas(Modifier.size(size)) {
+        val cell = this.size.width / 4f
+        for (row in 0 until 4) {
+            for (col in 0 until 4) {
+                if ((row + col) % 2 == 0) {
+                    drawRect(
+                        color = Color(0xFF161616),
+                        topLeft = Offset(col * cell, row * cell),
+                        size = androidx.compose.ui.geometry.Size(cell, cell),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DetailsInfoRow(
     label: String,
     value: String,
     boldValue: Boolean = false,
@@ -351,12 +392,18 @@ private fun LeaderboardCard(entries: List<com.volna.app.domain.model.Leaderboard
             .padding(VolnaTheme.tokens.spacing.md),
         verticalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.sm),
     ) {
-        Text(
-            text = "🏁 Рекорды трассы",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xs),
+        ) {
+            CheckeredFlagMark()
+            Text(
+                text = "Рекорды трассы",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         entries.forEach { entry ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -393,7 +440,7 @@ private fun LeaderboardCard(entries: List<com.volna.app.domain.model.Leaderboard
 }
 
 /** 41890 → «41.890», 61234 → «1:01.234». */
-private fun Int.toLapTimeText(): String {
+internal fun Int.toLapTimeText(): String {
     val minutes = this / 60_000
     val seconds = (this % 60_000) / 1000
     val millis = (this % 1000).toString().padStart(3, '0')

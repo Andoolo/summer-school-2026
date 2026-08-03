@@ -41,6 +41,9 @@ import com.volna.app.catalog.presentation.SlotDetailsState
 import com.volna.app.catalog.presentation.SlotListIntent
 import com.volna.app.catalog.presentation.SlotListScreen
 import com.volna.app.catalog.presentation.SlotListState
+import com.volna.app.catalog.presentation.TrackIntent
+import com.volna.app.catalog.presentation.TrackScreen
+import com.volna.app.catalog.presentation.TrackState
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.time.AppClock
@@ -76,6 +79,8 @@ internal fun MainTabs(
     appConfig: AppConfig,
     profileState: ProfileState,
     onProfileIntent: (ProfileIntent) -> Unit,
+    trackState: TrackState,
+    onTrackIntent: (TrackIntent) -> Unit,
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -121,6 +126,17 @@ internal fun MainTabs(
                         onIntent = onSlotDetailsIntent,
                         onBack = { navController.popBackStack() },
                         onBook = { slot -> navController.navigate(SlotBookingDestination(slot.id.value)) },
+                        onOpenTrack = { routeId -> navController.navigate(TrackDestination(routeId.value)) },
+                    )
+                }
+
+                composable<TrackDestination> { entry ->
+                    val route = entry.toRoute<TrackDestination>()
+                    TrackScreen(
+                        routeId = route.routeId(),
+                        state = trackState,
+                        onIntent = onTrackIntent,
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -135,6 +151,7 @@ internal fun MainTabs(
                             onIntent = onSlotDetailsIntent,
                             onBack = { navController.popBackStack() },
                             onBook = { slot -> navController.navigate(SlotBookingDestination(slot.id.value)) },
+                            onOpenTrack = { routeId -> navController.navigate(TrackDestination(routeId.value)) },
                         )
                     } else {
                         BookingFormScreen(
