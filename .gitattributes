@@ -1,0 +1,35 @@
+# Единые переносы строк в репозитории.
+#
+# Внутри git всё хранится с LF — так и было. Проблема возникает на Windows, где
+# core.autocrlf=true выгружает файлы с CRLF: инструменты, которые читают рабочее
+# дерево из Linux-контейнера (gofmt, линтеры), считают такие файлы неотформатированными.
+# Явные правила ниже перекрывают локальную настройку autocrlf у любого разработчика.
+
+# По умолчанию: git сам определяет текстовые файлы, в рабочее дерево кладёт LF.
+* text=auto eol=lf
+
+# Скрипты, которые запускаются в Linux/CI: CRLF сделал бы их невыполнимыми
+# («bad interpreter»), поэтому фиксируем явно.
+*.sh    text eol=lf
+gradlew text eol=lf
+
+# Файлы, которым нужен CRLF, чтобы работать на Windows.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Бинарные форматы — не трогать и не пытаться сливать построчно.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.jar  binary
+*.wasm binary
+*.woff  binary
+*.woff2 binary
+
+# Сгенерированный код и лок-файлы: не участвуют в подсчёте языков на GitHub
+# и сворачиваются в диффах, чтобы не забивать ревью.
+*.gen.go        linguist-generated=true
+kotlin-js-store/** linguist-generated=true
