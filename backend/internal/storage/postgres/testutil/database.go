@@ -44,6 +44,15 @@ func PrepareDatabase(t *testing.T) string {
 		t.Fatalf("set search_path: %v", err)
 	}
 
+	// CREATE EXTENSION действует на всю базу, а не на схему теста. Когда пакеты
+	// тестов идут параллельно, два соединения одновременно доходят до этого места
+	// в миграции 00001 — и "IF NOT EXISTS" от гонки не спасает: Postgres падает с
+	// duplicate key на pg_extension_name_index. Создаём расширение заранее под
+	// advisory-блокировкой, чтобы в миграции оно уже существовало и она стала no-op.
+	if err := createSharedExtensions(ctx, db); err != nil {
+		t.Fatalf("prepare shared extensions: %v", err)
+	}
+
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatalf("set goose dialect: %v", err)
 	}
@@ -52,6 +61,23 @@ func PrepareDatabase(t *testing.T) string {
 	}
 
 	return databaseURLWithSearchPath(t, databaseURL, schemaName)
+}
+
+// createSharedExtensions создаёт расширения уровня базы под advisory-блокировкой:
+// параллельные тестовые пакеты делят одну базу и иначе конфликтуют друг с другом.
+// Блокировка снимается автоматически при закрытии соединения, но снимаем явно.
+func createSharedExtensions(ctx context.Context, db *sql.DB) error {
+	const lockID = 4815162342 // произвольный, лишь бы совпадал у всех пакетов
+
+	if _, err := db.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, lockID); err != nil {
+		return fmt.Errorf("acquire advisory lock: %w", err)
+	}
+	defer func() { _, _ = db.ExecContext(ctx, `SELECT pg_advisory_unlock($1)`, lockID) }()
+
+	if _, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS pgcrypto`); err != nil {
+		return fmt.Errorf("create pgcrypto: %w", err)
+	}
+	return nil
 }
 
 func migrationsDir(t *testing.T) string {

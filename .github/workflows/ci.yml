@@ -6,9 +6,20 @@ on:
   pull_request:
 
 jobs:
-  backend-test:
-    name: Backend (Go build + vet + test)
+  # Матрица по обоим приложениям: «Волна» (референс) и «Апекс» (картинг-версия).
+  # Раньше проверялась только «Волна», и весь картинговый код — включая расчёты
+  # трассы и лидерборд — в CI не попадал вовсе.
+  backend:
+    name: Backend · ${{ matrix.app }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: volna
+            dir: backend
+          - app: apex
+            dir: karting-apex/backend
     services:
       db:
         image: postgres:16-alpine
@@ -25,7 +36,7 @@ jobs:
           --health-retries 10
     defaults:
       run:
-        working-directory: backend
+        working-directory: ${{ matrix.dir }}
     env:
       DATABASE_URL: postgres://volna:volna@localhost:5432/volna?sslmode=disable
       TEST_DATABASE_URL: postgres://volna:volna@localhost:5432/volna?sslmode=disable
@@ -35,7 +46,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: ${{ matrix.dir }}/go.sum
+
+      - name: gofmt
+        # Проверяем форматирование отдельным шагом: go vet его не ловит.
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Файлы не отформатированы (запустите gofmt -w):"
+            echo "$unformatted"
+            exit 1
+          fi
 
       - name: go build
         run: go build ./...
@@ -49,12 +70,44 @@ jobs:
       - name: go test
         run: go test ./...
 
-  client-build:
-    name: Client (Kotlin Multiplatform build)
+  backend-lint:
+    name: Backend lint · ${{ matrix.app }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: volna
+            dir: backend
+          - app: apex
+            dir: karting-apex/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: ${{ matrix.dir }}/go.sum
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ${{ matrix.dir }}
+
+  client:
+    name: Client · ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: volna
+            dir: client
+          - app: apex
+            dir: karting-apex/client
     defaults:
       run:
-        working-directory: client
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +117,12 @@ jobs:
           java-version: '17'
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: run tests (commonTest)
+        # Общие тесты выполняются на Android-таргете: он работает на JVM без эмулятора,
+        # а нужный SDK на ubuntu-раннере уже установлен. Альтернатива — wasmJs-таргет,
+        # но он требует поднимать браузер через karma и заметно медленнее.
+        run: ./gradlew :shared:testDebugUnitTest --console=plain
 
       - name: compile shared (common + wasmJs)
         run: ./gradlew :shared:compileKotlinWasmJs --console=plain
