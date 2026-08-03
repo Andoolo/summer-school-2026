@@ -21,6 +21,16 @@
 </head>
 <body>
 <canvas id="compose-root"></canvas>
+<script>
+    // Локальная разработка (localhost/127.0.0.1) — оставляем пусто, клиент падает на
+    // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8080).
+    // Продакшн-деплой — подставляем публичный URL задеплоенного бэкенда.
+    // TODO(деплой): заменить на реальный адрес backend-сервиса на Render после первого деплоя.
+    window.__API_BASE_URL__ =
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+            ? ""
+            : "https://REPLACE_WITH_RENDER_BACKEND_URL";
+</script>
 <script src="skiko.js"></script>
 <script src="volna-web.js"></script>
 </body>
