@@ -371,6 +371,60 @@ INSERT INTO lap_results (booking_id, lap_number, lap_time_ms) VALUES ($1, $2, $3
 	return best, nil
 }
 
+// RaceParticipant — участник прошедшего заезда глазами маршала (F6).
+type RaceParticipant struct {
+	BookingID  string
+	RacerName  string
+	SeatsCount int
+	Laps       int
+	BestLapMs  *int
+}
+
+// RaceRoster отдаёт список участников заезда с уже внесёнными результатами.
+// Без него маршалу пришлось бы вводить идентификатор брони вручную.
+// Второе значение — false, если заезда с таким id нет.
+func (r *SlotRepository) RaceRoster(ctx context.Context, slotID string) (string, time.Time, []RaceParticipant, bool, error) {
+	var routeName string
+	var startAt time.Time
+	err := r.db.QueryRow(ctx, `
+SELECT rt.name, s.start_at
+FROM slots s JOIN routes rt ON rt.id = s.route_id
+WHERE s.id = $1`, slotID).Scan(&routeName, &startAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", time.Time{}, nil, false, nil
+	}
+	if err != nil {
+		return "", time.Time{}, nil, false, fmt.Errorf("get slot for roster: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, `
+SELECT b.id::text, COALESCE(c.name, 'Гонщик'), b.seats_count,
+       count(lr.id), MIN(lr.lap_time_ms)
+FROM bookings b
+JOIN clients c ON c.id = b.client_id
+LEFT JOIN lap_results lr ON lr.booking_id = b.id
+WHERE b.slot_id = $1 AND b.status = 'active'
+GROUP BY b.id, c.name, b.seats_count, b.created_at
+ORDER BY b.created_at ASC`, slotID)
+	if err != nil {
+		return "", time.Time{}, nil, false, fmt.Errorf("query roster: %w", err)
+	}
+	defer rows.Close()
+
+	participants := make([]RaceParticipant, 0)
+	for rows.Next() {
+		var p RaceParticipant
+		if err := rows.Scan(&p.BookingID, &p.RacerName, &p.SeatsCount, &p.Laps, &p.BestLapMs); err != nil {
+			return "", time.Time{}, nil, false, fmt.Errorf("scan participant: %w", err)
+		}
+		participants = append(participants, p)
+	}
+	if err := rows.Err(); err != nil {
+		return "", time.Time{}, nil, false, fmt.Errorf("iterate roster: %w", err)
+	}
+	return routeName, startAt, participants, true, nil
+}
+
 func slotWhere(filters SlotFilters) (string, []any) {
 	conditions := make([]string, 0)
 	args := make([]any, 0)

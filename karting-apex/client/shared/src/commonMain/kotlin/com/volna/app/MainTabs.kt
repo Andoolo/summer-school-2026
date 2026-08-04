@@ -44,6 +44,9 @@ import com.volna.app.catalog.presentation.SlotListState
 import com.volna.app.catalog.presentation.TrackIntent
 import com.volna.app.catalog.presentation.TrackScreen
 import com.volna.app.catalog.presentation.TrackState
+import com.volna.app.marshal.presentation.MarshalIntent
+import com.volna.app.marshal.presentation.MarshalScreen
+import com.volna.app.marshal.presentation.MarshalState
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.time.AppClock
@@ -81,6 +84,8 @@ internal fun MainTabs(
     onProfileIntent: (ProfileIntent) -> Unit,
     trackState: TrackState,
     onTrackIntent: (TrackIntent) -> Unit,
+    marshalState: MarshalState,
+    onMarshalIntent: (MarshalIntent) -> Unit,
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -127,6 +132,14 @@ internal fun MainTabs(
                         onBack = { navController.popBackStack() },
                         onBook = { slot -> navController.navigate(SlotBookingDestination(slot.id.value)) },
                         onOpenTrack = { routeId -> navController.navigate(TrackDestination(routeId.value)) },
+                    )
+                }
+
+                composable<MarshalDestination> {
+                    MarshalScreen(
+                        state = marshalState,
+                        onIntent = onMarshalIntent,
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -215,6 +228,7 @@ internal fun MainTabs(
                         state = profileState,
                         appConfig = appConfig,
                         onIntent = onProfileIntent,
+                        onOpenMarshal = { navController.navigate(MarshalDestination) },
                     )
                 }
             }

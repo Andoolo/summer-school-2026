@@ -18,6 +18,16 @@ kotlin {
         }
     }
 
+    // JVM-цель добавлена не для приложения, а чтобы общие тесты (commonTest) было
+    // где запускать. Остальные цели для этого не годятся: android требует
+    // установленного SDK, ios — macOS, wasmJs — браузер или Node. На Linux в CI
+    // не запускалась ни одна, и написанные тесты годами лежали мёртвым грузом.
+    jvm {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
     iosX64()
     iosArm64()
     iosSimulatorArm64()

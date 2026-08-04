@@ -121,10 +121,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: run tests (commonTest)
-        # Общие тесты выполняются на Android-таргете: он работает на JVM без эмулятора,
-        # а нужный SDK на ubuntu-раннере уже установлен. Альтернатива — wasmJs-таргет,
-        # но он требует поднимать браузер через karma и заметно медленнее.
-        run: ./gradlew :shared:testDebugUnitTest --console=plain
+        # Общие тесты выполняются на JVM-таргете: он не требует ни Android SDK, ни macOS,
+        # ни браузера, поэтому одинаково запускается и в CI, и на машине разработчика.
+        # Android-таргет тоже подошёл бы на ubuntu-раннере, но локально без SDK не заводится,
+        # а wasmJs требует поднимать браузер через karma и заметно медленнее.
+        run: ./gradlew :shared:jvmTest --console=plain
 
       - name: compile shared (common + wasmJs)
         run: ./gradlew :shared:compileKotlinWasmJs --console=plain

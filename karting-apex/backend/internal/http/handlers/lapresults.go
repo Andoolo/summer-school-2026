@@ -49,15 +49,80 @@ func NewMarshalHandler(repo *postgres.SlotRepository, token string) *MarshalHand
 	return &MarshalHandler{repo: repo, token: token, now: time.Now}
 }
 
+type raceParticipantDTO struct {
+	BookingID string `json:"booking_id"`
+	RacerName string `json:"racer_name"`
+	Seats     int    `json:"seats"`
+	Laps      int    `json:"laps"`
+	BestLapMs *int   `json:"best_lap_ms,omitempty"`
+}
+
+type raceRosterDTO struct {
+	SlotID       string               `json:"slot_id"`
+	RouteName    string               `json:"route_name"`
+	StartAt      time.Time            `json:"start_at"`
+	AlreadyRaced bool                 `json:"already_raced"`
+	Participants []raceParticipantDTO `json:"participants"`
+}
+
+// RaceRoster — GET /slots/{slotID}/participants: кто был на заезде и какие
+// результаты уже внесены. Нужен, чтобы маршал выбирал гонщика из списка,
+// а не вводил идентификатор брони руками.
+func (h *MarshalHandler) RaceRoster(w http.ResponseWriter, r *http.Request) {
+	if !h.authorized(r) {
+		httpapi.WriteError(w, http.StatusForbidden, httpapi.CodeForbidden, "Недостаточно прав для выполнения операции.", nil)
+		return
+	}
+
+	slotID, err := uuid.Parse(chi.URLParam(r, "slotID"))
+	if err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, "Неверные параметры запроса. Проверьте корректность переданных значений.", nil)
+		return
+	}
+
+	routeName, startAt, participants, found, err := h.repo.RaceRoster(r.Context(), slotID.String())
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
+		return
+	}
+	if !found {
+		httpapi.WriteError(w, http.StatusNotFound, httpapi.CodeNotFound, "Запрашиваемый ресурс не найден.", nil)
+		return
+	}
+
+	dto := raceRosterDTO{
+		SlotID:       slotID.String(),
+		RouteName:    routeName,
+		StartAt:      startAt,
+		AlreadyRaced: startAt.Before(h.now()),
+		Participants: make([]raceParticipantDTO, 0, len(participants)),
+	}
+	for _, p := range participants {
+		dto.Participants = append(dto.Participants, raceParticipantDTO{
+			BookingID: p.BookingID,
+			RacerName: p.RacerName,
+			Seats:     p.SeatsCount,
+			Laps:      p.Laps,
+			BestLapMs: p.BestLapMs,
+		})
+	}
+	httpapi.WriteJSON(w, http.StatusOK, dto)
+}
+
+// authorized сравнивает токен за постоянное время: обычное сравнение строк
+// завершается на первом несовпавшем байте, и по времени ответа секрет
+// подбирается посимвольно.
+func (h *MarshalHandler) authorized(r *http.Request) bool {
+	provided := r.Header.Get("X-Marshal-Token")
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(h.token)) == 1
+}
+
 // SubmitLapResults — POST /bookings/{bookingID}/lap-results.
 //
 // Полностью заменяет времена кругов брони: маршал вносит результаты заезда целиком
 // и может переотправить их, исправив опечатку.
 func (h *MarshalHandler) SubmitLapResults(w http.ResponseWriter, r *http.Request) {
-	// Сравнение постоянного времени: обычное сравнение строк завершается на первом
-	// несовпавшем байте, и по времени ответа токен можно подобрать посимвольно.
-	provided := r.Header.Get("X-Marshal-Token")
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(h.token)) != 1 {
+	if !h.authorized(r) {
 		httpapi.WriteError(w, http.StatusForbidden, httpapi.CodeForbidden, "Недостаточно прав для выполнения операции.", nil)
 		return
 	}

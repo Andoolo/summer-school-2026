@@ -18,6 +18,11 @@ import com.volna.app.catalog.data.KtorInstructorRepository
 import com.volna.app.catalog.data.KtorSlotRepository
 import com.volna.app.catalog.presentation.SlotDetailsStore
 import com.volna.app.catalog.presentation.TrackStore
+import com.volna.app.core.storage.MarshalTokenStorage
+import com.volna.app.core.storage.PlatformMarshalStorage
+import com.volna.app.marshal.MarshalRepository
+import com.volna.app.marshal.data.KtorMarshalRepository
+import com.volna.app.marshal.presentation.MarshalStore
 import com.volna.app.catalog.presentation.SlotListStore
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.config.platformApiBaseUrl
@@ -45,6 +50,8 @@ val volnaAppModule = module {
     single { AppConfig() }
     single<AppClock> { SystemAppClock }
     single<SessionStorage> { PlatformSessionStorage }
+    single<MarshalTokenStorage> { PlatformMarshalStorage }
+    single<MarshalRepository> { KtorMarshalRepository(get()) }
     single<SessionRepository> { DefaultSessionRepository(get()) }
     single {
         VolnaApiClient(
@@ -65,6 +72,7 @@ val volnaAppModule = module {
     viewModel { SlotListStore(get(), get()) }
     viewModel { SlotDetailsStore(get()) }
     viewModel { TrackStore(get()) }
+    viewModel { MarshalStore(get(), get(), get(), get()) }
     viewModel { BookingFormStore(get(), get()) }
     viewModel { BookingListStore(get(), get()) }
     viewModel { BookingDetailsStore(get(), get()) }

@@ -35,6 +35,9 @@ type RouterOptions struct {
 	// вовсе: без заданного MARSHAL_TOKEN функция должна быть недоступна, а не просто
 	// отвечать отказом.
 	MarshalLapResults http.HandlerFunc
+	// MarshalRaceRoster — ручной маршрут GET /slots/{slotID}/participants
+	// (список участников заезда для маршала). Включается тем же MARSHAL_TOKEN.
+	MarshalRaceRoster http.HandlerFunc
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
@@ -89,6 +92,9 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.MarshalLapResults != nil {
 		router.Post("/bookings/{bookingID}/lap-results", opts.MarshalLapResults)
+	}
+	if opts.MarshalRaceRoster != nil {
+		router.Get("/slots/{slotID}/participants", opts.MarshalRaceRoster)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})

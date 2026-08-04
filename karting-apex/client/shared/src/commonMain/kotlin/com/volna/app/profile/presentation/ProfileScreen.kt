@@ -34,6 +34,7 @@ fun ProfileScreen(
     state: ProfileState,
     appConfig: AppConfig,
     onIntent: (ProfileIntent) -> Unit,
+    onOpenMarshal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -86,6 +87,7 @@ fun ProfileScreen(
                     phone = profile.value.phone.value,
                     onOpenExternalUrl = openExternalUrl,
                     onIntent = onIntent,
+                    onOpenMarshal = onOpenMarshal,
                 )
                 is Loadable.Error -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
                 is Loadable.Empty -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
@@ -121,6 +123,7 @@ private fun ProfileContent(
     phone: String,
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
+    onOpenMarshal: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -137,6 +140,7 @@ private fun ProfileContent(
                 phone = phone,
                 onOpenExternalUrl = onOpenExternalUrl,
                 onIntent = onIntent,
+                onOpenMarshal = onOpenMarshal,
             )
             ProfileMode.Edit -> ProfileEditContent(
                 state = state,
@@ -158,6 +162,7 @@ private fun ProfileViewContent(
     phone: String,
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
+    onOpenMarshal: () -> Unit,
 ) {
     ProfileInfoRow(
         label = null,
@@ -169,6 +174,14 @@ private fun ProfileViewContent(
         label = "Телефон",
         value = formatPhoneNumber(phone),
         onClick = { onIntent(ProfileIntent.EditClicked) },
+    )
+    Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+    // Вход в рабочее место маршала (F6): доступ даёт токен, а не эта кнопка,
+    // поэтому её видно всем — сам режим без токена ничего не покажет.
+    ProfileInfoRow(
+        label = "Для персонала",
+        value = "Режим маршала",
+        onClick = onOpenMarshal,
     )
     Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
     ProfileLinks(

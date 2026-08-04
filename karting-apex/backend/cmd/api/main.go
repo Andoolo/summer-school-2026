@@ -69,9 +69,11 @@ func main() {
 
 	// Внесение результатов маршалом включается только явным MARSHAL_TOKEN.
 	// Пусто — обработчик не создаётся и маршрут не регистрируется.
-	var marshalLapResults http.HandlerFunc
+	var marshalLapResults, marshalRaceRoster http.HandlerFunc
 	if cfg.MarshalToken != "" {
-		marshalLapResults = handlers.NewMarshalHandler(slotRepo, cfg.MarshalToken).SubmitLapResults
+		marshalHandler := handlers.NewMarshalHandler(slotRepo, cfg.MarshalToken)
+		marshalLapResults = marshalHandler.SubmitLapResults
+		marshalRaceRoster = marshalHandler.RaceRoster
 		logger.Info("marshal lap entry enabled")
 	}
 	instructorHandler := handlers.NewInstructorHandler(postgres.NewInstructorRepository(db))
@@ -88,6 +90,7 @@ func main() {
 			RouteLeaderboard:  slotHandler.Leaderboard,
 			RoutePassport:     slotHandler.TrackPassport,
 			MarshalLapResults: marshalLapResults,
+			MarshalRaceRoster: marshalRaceRoster,
 			Dev:               cfg.Dev,
 			AllowedOrigin:     cfg.AllowedOrigin,
 		}),

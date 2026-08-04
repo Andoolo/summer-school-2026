@@ -38,6 +38,10 @@ internal data class SlotBookingDestination(val slotId: String)
 internal data class TrackDestination(val routeId: String)
 
 @Serializable
+@SerialName("marshal")
+internal data object MarshalDestination
+
+@Serializable
 @SerialName("bookings")
 internal data object BookingsDestination
 

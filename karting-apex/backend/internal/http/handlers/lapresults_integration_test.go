@@ -38,6 +38,7 @@ func TestMarshalLapResults(t *testing.T) {
 		Slots:             handlers.NewSlotHandler(repo),
 		RouteLeaderboard:  handlers.NewSlotHandler(repo).Leaderboard,
 		MarshalLapResults: handlers.NewMarshalHandler(repo, marshalToken).SubmitLapResults,
+		MarshalRaceRoster: handlers.NewMarshalHandler(repo, marshalToken).RaceRoster,
 	})
 
 	pastBooking := seedRace(t, ctx, db, raceFixture{
@@ -185,6 +186,131 @@ func TestMarshalRouteAbsentWithoutToken(t *testing.T) {
 	if recorder.Code != http.StatusNotFound && recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("статус = %d, ожидали отсутствие маршрута", recorder.Code)
 	}
+}
+
+// Список участников заезда: маршал выбирает гонщика из него, а не вводит
+// идентификатор брони руками.
+func TestMarshalRaceRoster(t *testing.T) {
+	databaseURL := testutil.PrepareDatabase(t)
+	ctx := context.Background()
+	db, err := postgres.Connect(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	t.Cleanup(db.Close)
+
+	repo := postgres.NewSlotRepository(db)
+	handler := handlers.NewMarshalHandler(repo, marshalToken)
+	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{
+		MarshalRaceRoster: handler.RaceRoster,
+		MarshalLapResults: handler.SubmitLapResults,
+	})
+
+	slotID := "e2000000-0000-4000-8000-0000000000a1"
+	booking := seedRace(t, ctx, db, raceFixture{
+		clientID:  "e1000000-0000-4000-8000-0000000000a1",
+		phone:     "+79995001001",
+		name:      "Гонщик Первый",
+		slotID:    slotID,
+		bookingID: "e3000000-0000-4000-8000-0000000000a1",
+		startAt:   time.Now().Add(-4 * time.Hour),
+		status:    "active",
+	})
+	// Отменённая запись на том же заезде: гонщик не выходил на трассу.
+	seedExtraBooking(t, ctx, db, slotID, "e1000000-0000-4000-8000-0000000000a2",
+		"+79995001002", "Гонщик Отменённый", "e3000000-0000-4000-8000-0000000000a2", "cancelled")
+
+	t.Run("без токена доступ закрыт", func(t *testing.T) {
+		r := getRoster(router, "", slotID)
+		if r.Code != http.StatusForbidden {
+			t.Fatalf("статус = %d, ожидали 403", r.Code)
+		}
+	})
+
+	t.Run("отменённые записи в список не попадают", func(t *testing.T) {
+		r := getRoster(router, marshalToken, slotID)
+		if r.Code != http.StatusOK {
+			t.Fatalf("статус = %d, тело = %s", r.Code, r.Body.String())
+		}
+		var resp struct {
+			AlreadyRaced bool `json:"already_raced"`
+			Participants []struct {
+				RacerName string `json:"racer_name"`
+				Laps      int    `json:"laps"`
+				BestLapMs *int   `json:"best_lap_ms"`
+			} `json:"participants"`
+		}
+		decode(t, r, &resp)
+
+		if len(resp.Participants) != 1 {
+			t.Fatalf("участников = %d, ожидали 1: отменённая запись не должна попадать", len(resp.Participants))
+		}
+		if resp.Participants[0].RacerName != "Гонщик Первый" {
+			t.Errorf("гонщик = %q", resp.Participants[0].RacerName)
+		}
+		if resp.Participants[0].Laps != 0 || resp.Participants[0].BestLapMs != nil {
+			t.Errorf("до внесения результатов кругов быть не должно: %+v", resp.Participants[0])
+		}
+		if !resp.AlreadyRaced {
+			t.Error("заезд в прошлом — already_raced должен быть true")
+		}
+	})
+
+	t.Run("после внесения результаты видны в списке", func(t *testing.T) {
+		if r := submitLaps(router, marshalToken, booking, `{"lap_times_ms":[43000,42100]}`); r.Code != http.StatusOK {
+			t.Fatalf("внести круги: статус %d, тело %s", r.Code, r.Body.String())
+		}
+
+		r := getRoster(router, marshalToken, slotID)
+		var resp struct {
+			Participants []struct {
+				Laps      int  `json:"laps"`
+				BestLapMs *int `json:"best_lap_ms"`
+			} `json:"participants"`
+		}
+		decode(t, r, &resp)
+
+		if resp.Participants[0].Laps != 2 {
+			t.Errorf("кругов = %d, ожидали 2", resp.Participants[0].Laps)
+		}
+		if resp.Participants[0].BestLapMs == nil || *resp.Participants[0].BestLapMs != 42100 {
+			t.Errorf("лучший круг = %v, ожидали 42100", resp.Participants[0].BestLapMs)
+		}
+	})
+
+	t.Run("несуществующий заезд", func(t *testing.T) {
+		r := getRoster(router, marshalToken, "e2000000-0000-4000-8000-00000000dead")
+		if r.Code != http.StatusNotFound {
+			t.Fatalf("статус = %d, ожидали 404", r.Code)
+		}
+	})
+}
+
+func seedExtraBooking(t *testing.T, ctx context.Context, db *pgxpool.Pool, slotID, clientID, phone, name, bookingID, status string) {
+	t.Helper()
+	if _, err := db.Exec(ctx, `INSERT INTO clients (id, phone, name) VALUES ($1, $2, $3)`, clientID, phone, name); err != nil {
+		t.Fatalf("вставить клиента: %v", err)
+	}
+	var cancelledAt *time.Time
+	if status != "active" {
+		now := time.Now()
+		cancelledAt = &now
+	}
+	if _, err := db.Exec(ctx, `
+INSERT INTO bookings (id, slot_id, client_id, seats_count, rental_count, status, created_at, cancelled_at)
+VALUES ($1, $2, $3, 1, 0, $4, now(), $5)`, bookingID, slotID, clientID, status, cancelledAt); err != nil {
+		t.Fatalf("вставить бронь: %v", err)
+	}
+}
+
+func getRoster(router http.Handler, token, slotID string) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/slots/%s/participants", slotID), nil)
+	if token != "" {
+		req.Header.Set("X-Marshal-Token", token)
+	}
+	router.ServeHTTP(recorder, req)
+	return recorder
 }
 
 type raceFixture struct {
