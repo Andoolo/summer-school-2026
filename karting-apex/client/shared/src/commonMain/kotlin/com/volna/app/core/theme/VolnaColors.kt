@@ -16,6 +16,12 @@ data class VolnaColorScheme(
     val success: Color,
     val warning: Color,
     val error: Color,
+    /**
+     * Фон вокруг колонки приложения на широких экранах. Приложение спроектировано
+     * под телефон; на десктопе оно остаётся колонкой, а подложка показывает, что
+     * это осознанное решение, а не сжавшаяся вёрстка. На узких экранах не видна.
+     */
+    val backdrop: Color,
 )
 
 // Картинг-палитра «Апекс»: гоночный красный + графит (вместо бирюзы «Волны»).
@@ -31,4 +37,5 @@ val VolnaLightColors = VolnaColorScheme(
     success = Color(0xFF237A4B),
     warning = Color(0xFF9A6400),
     error = Color(0xFFB3261E),
+    backdrop = Color(0xFF15151E),
 )

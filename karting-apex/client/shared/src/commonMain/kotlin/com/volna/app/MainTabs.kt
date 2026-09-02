@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -94,13 +95,17 @@ internal fun MainTabs(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(VolnaTheme.tokens.colors.backdrop),
         contentAlignment = Alignment.TopCenter,
     ) {
         Box(
+            // Порядок важен: widthIn ДО fillMaxHeight. Если сначала занять всю ширину,
+            // минимум станет равен максимуму, и ограничение перестанет действовать —
+            // мобильная вёрстка растянется на весь десктоп.
             modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = VolnaTheme.tokens.sizing.screenMaxWidth),
+                .widthIn(max = VolnaTheme.tokens.sizing.screenMaxWidth)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.background),
         ) {
             NavHost(
                 navController = navController,

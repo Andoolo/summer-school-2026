@@ -71,9 +71,10 @@ fun ProfileScreen(
             fontWeight = FontWeight.Bold,
         )
         Box(
+            // См. MainTabs: widthIn обязан идти до fillMaxHeight, иначе не сработает.
             modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = VolnaTheme.tokens.sizing.screenMaxWidth),
+                .widthIn(max = VolnaTheme.tokens.sizing.screenMaxWidth)
+                .fillMaxHeight(),
         ) {
             when (val profile = state.profile) {
                 Loadable.Initial,
