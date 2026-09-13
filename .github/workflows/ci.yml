@@ -138,3 +138,25 @@ jobs:
         # компилируется нигде: локально нет Android SDK. На ubuntu-раннере SDK уже стоит.
         if: matrix.app == 'apex'
         run: ./gradlew :androidApp:compileDebugKotlin --console=plain
+
+  client-ios:
+    # iOS-код (NSUserDefaults-хранилища токенов и темы) компилируется только на macOS:
+    # ни на Linux-раннере, ни на Windows-машине разработчика Kotlin/Native под iOS не
+    # собирается. Отдельная задача, чтобы не гонять весь клиентский набор на дорогом раннере.
+    name: Client · apex · iOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: karting-apex/client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: compile shared for iOS simulator (arm64)
+        run: ./gradlew :shared:compileKotlinIosSimulatorArm64 --console=plain
