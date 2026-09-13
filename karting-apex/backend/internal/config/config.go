@@ -37,9 +37,9 @@ type Config struct {
 	// выключены в dev (там k6 и ручные проверки шлют всё с одного адреса). RATE_LIMIT
 	// = on/off переопределяет умолчание.
 	RateLimit bool
-	// TrustProxy — брать IP клиента из X-Forwarded-For. Включается сам на Render
-	// (платформа всегда выставляет RENDER=true) или явно TRUST_PROXY=true. Без прокси
-	// включать нельзя: заголовок подделывается клиентом.
+	// TrustProxy — брать IP клиента из CF-Connecting-IP (Render стоит за Cloudflare).
+	// Включается сам на Render (платформа всегда выставляет RENDER=true) или явно
+	// TRUST_PROXY=true. Без Cloudflare включать нельзя: заголовок подделывается.
 	TrustProxy bool
 }
 

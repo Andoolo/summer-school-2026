@@ -88,8 +88,6 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	})
 	router.Get("/healthz", healthHandler)
 	router.Get("/readyz", healthHandler)
-	// ВРЕМЕННО: см. proxy_diag.go, удаляется после диагностики прокси.
-	router.Get("/internal/proxy-diag", proxyDiagHandler)
 	if opts.Auth != nil {
 		authapi.HandlerWithOptions(opts.Auth, authapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})
 	}

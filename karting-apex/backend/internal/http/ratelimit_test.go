@@ -60,16 +60,24 @@ func TestWindowLimiterSweepsAndCapsKeys(t *testing.T) {
 func TestClientIP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/slots", nil)
 	req.RemoteAddr = "10.0.0.1:5555"
-	req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.1.1.1")
+	// Так выглядит запрос с подделанным X-Forwarded-For на Render: подделка первой,
+	// настоящий адрес — в CF-Connecting-IP.
+	req.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.20, 172.64.0.1, 10.1.1.1")
+	req.Header.Set("CF-Connecting-IP", "198.51.100.20")
 
 	if got := clientIP(req, false); got != "10.0.0.1" {
 		t.Fatalf("without proxy trust got %q, want socket address", got)
 	}
-	if got := clientIP(req, true); got != "203.0.113.7" {
-		t.Fatalf("with proxy trust got %q, want first forwarded address", got)
+	if got := clientIP(req, true); got != "198.51.100.20" {
+		t.Fatalf("with proxy trust got %q, want CF-Connecting-IP, not spoofed forwarded address", got)
 	}
 
-	req.Header.Set("X-Forwarded-For", "2001:db8:1:2:aaaa:bbbb:cccc:dddd")
+	req.Header.Del("CF-Connecting-IP")
+	if got := clientIP(req, true); got != "10.0.0.1" {
+		t.Fatalf("without CF-Connecting-IP got %q, want socket address (X-Forwarded-For is spoofable)", got)
+	}
+
+	req.Header.Set("CF-Connecting-IP", "2001:db8:1:2:aaaa:bbbb:cccc:dddd")
 	if got := clientIP(req, true); got != "2001:db8:1:2::/64" {
 		t.Fatalf("ipv6 got %q, want /64 prefix", got)
 	}

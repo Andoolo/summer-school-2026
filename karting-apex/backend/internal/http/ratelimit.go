@@ -18,9 +18,9 @@ import (
 // Счётчики живут в памяти процесса: у сервиса один инстанс, а сброс при перезапуске
 // лишь ненадолго ослабляет второй рубеж.
 type RateLimitOptions struct {
-	// TrustProxy — брать IP клиента из X-Forwarded-For. Нужно за прокси (Render):
-	// иначе все запросы приходят с адреса балансировщика и делят один лимит на всех.
-	// Без прокси включать нельзя — заголовок подделывается клиентом.
+	// TrustProxy — брать IP клиента из CF-Connecting-IP. Нужно за прокси (Render стоит
+	// за Cloudflare): иначе все запросы приходят с адреса внутреннего балансировщика и
+	// делят один лимит на всех. Без Cloudflare включать нельзя — заголовок подделывается.
 	TrustProxy bool
 	Logger     *slog.Logger
 }
@@ -85,12 +85,20 @@ func writeRateLimited(w http.ResponseWriter, logger *slog.Logger, rule, ip, path
 // clientIP возвращает ключ клиента для лимитов. IPv6 сводится к префиксу /64: провайдер
 // обычно выдаёт абоненту целую подсеть, и без этого каждый адрес из неё получал бы
 // свой лимит.
+//
+// За прокси IP берётся из CF-Connecting-IP, а не из X-Forwarded-For. Проверено на
+// production: Render дописывает свою цепочку к присланному клиентом X-Forwarded-For,
+// поэтому первый адрес в нём подделывается и обходил лимит. CF-Connecting-IP
+// выставляет Cloudflare перед Render: присланный клиентом такой заголовок Cloudflare
+// отклоняет (403), а в обход Cloudflare сервис на Render недоступен.
+//
+// Если заголовка нет, берётся адрес соединения, а не X-Forwarded-For: общий лимит на
+// всех хуже для пользователей, но не даёт обойти защиту подделкой.
 func clientIP(r *http.Request, trustProxy bool) string {
 	raw := ""
 	if trustProxy {
-		// Render ставит реальный IP клиента первым в списке.
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			raw = strings.TrimSpace(strings.Split(forwarded, ",")[0])
+		if connecting := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); net.ParseIP(connecting) != nil {
+			raw = connecting
 		}
 	}
 	if raw == "" {
