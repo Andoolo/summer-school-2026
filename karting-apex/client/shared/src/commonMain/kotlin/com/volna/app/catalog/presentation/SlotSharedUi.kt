@@ -50,6 +50,7 @@ internal fun SkeletonCard(
 internal fun SlotTag(
     text: String,
     color: Color,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier,
 ) {
     Text(
@@ -61,7 +62,7 @@ internal fun SlotTag(
             )
             .padding(horizontal = VolnaTheme.tokens.spacing.xs, vertical = VolnaTheme.tokens.spacing.xxs),
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = contentColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -128,7 +129,7 @@ internal fun StateMessage(
             text = description,
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF797979),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         if (buttonText != null && onClick != null) {
@@ -150,10 +151,11 @@ internal fun StateMessage(
 @Composable
 private fun StateIllustration(artwork: StateArtwork) {
     val primary = MaterialTheme.colorScheme.primary
+    // Была бирюза «Волны» (#E5FFFC); теперь нейтральная плашка, которая работает в обеих темах.
+    val light = MaterialTheme.colorScheme.surfaceVariant
     Canvas(
         modifier = Modifier.size(width = 212.dp, height = 150.dp),
     ) {
-        val light = Color(0xFFE5FFFC)
         val basePath = androidx.compose.ui.graphics.Path().apply {
             moveTo(size.width * 0.15f, size.height * 0.82f)
             cubicTo(size.width * 0.02f, size.height * 0.46f, size.width * 0.28f, size.height * 0.03f, size.width * 0.52f, size.height * 0.12f)

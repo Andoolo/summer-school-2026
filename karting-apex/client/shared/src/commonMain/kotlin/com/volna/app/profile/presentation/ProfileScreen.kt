@@ -2,6 +2,8 @@ package com.volna.app.profile.presentation
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -12,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
@@ -20,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.logging.AppLogger
 import com.volna.app.core.phone.formatPhoneNumber
+import com.volna.app.core.theme.ThemeMode
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.ActionStatus
 import com.volna.app.core.ui.Loadable
@@ -35,6 +39,8 @@ fun ProfileScreen(
     appConfig: AppConfig,
     onIntent: (ProfileIntent) -> Unit,
     onOpenMarshal: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -89,6 +95,8 @@ fun ProfileScreen(
                     onOpenExternalUrl = openExternalUrl,
                     onIntent = onIntent,
                     onOpenMarshal = onOpenMarshal,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
                 )
                 is Loadable.Error -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
                 is Loadable.Empty -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
@@ -125,6 +133,8 @@ private fun ProfileContent(
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
     onOpenMarshal: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -142,6 +152,8 @@ private fun ProfileContent(
                 onOpenExternalUrl = onOpenExternalUrl,
                 onIntent = onIntent,
                 onOpenMarshal = onOpenMarshal,
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
             )
             ProfileMode.Edit -> ProfileEditContent(
                 state = state,
@@ -164,6 +176,8 @@ private fun ProfileViewContent(
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
     onOpenMarshal: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
 ) {
     ProfileInfoRow(
         label = null,
@@ -184,6 +198,8 @@ private fun ProfileViewContent(
         value = "Режим маршала",
         onClick = onOpenMarshal,
     )
+    Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+    ThemeModeSelector(selected = themeMode, onSelect = onThemeModeChange)
     Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
     ProfileLinks(
         appConfig = appConfig,
@@ -342,13 +358,13 @@ private fun ProfileInfoRow(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF797979),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (placeholder) Color(0xFF797979) else MaterialTheme.colorScheme.onSurface,
+                color = if (placeholder) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             )
         }
         VolnaIcon(
@@ -358,6 +374,72 @@ private fun ProfileInfoRow(
             size = VolnaTheme.tokens.spacing.lg,
         )
     }
+}
+
+/**
+ * Выбор темы: три сегмента в одной плашке, как системный переключатель на телефоне.
+ * Сегменты — radio-группа: так скринридер объявит «выбрано» и число вариантов.
+ */
+@Composable
+private fun ThemeModeSelector(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xs)) {
+        Text(
+            text = "Тема оформления",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
+                )
+                .padding(4.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            ThemeMode.entries.forEach { mode ->
+                val isSelected = mode == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(
+                            color = if (isSelected) MaterialTheme.colorScheme.background else Color.Transparent,
+                            shape = RoundedCornerShape(VolnaTheme.tokens.radius.md),
+                        )
+                        .selectable(
+                            selected = isSelected,
+                            onClick = { onSelect(mode) },
+                            role = Role.RadioButton,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = mode.label(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun ThemeMode.label(): String = when (this) {
+    ThemeMode.System -> "Системная"
+    ThemeMode.Light -> "Светлая"
+    ThemeMode.Dark -> "Тёмная"
 }
 
 @Composable
@@ -377,7 +459,7 @@ private fun ProfileLinks(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(Color(0xFFF2F2F2)),
+                .background(MaterialTheme.colorScheme.outlineVariant),
         )
         InfoLine(
             label = "Правила клуба",
@@ -433,19 +515,19 @@ private fun InfoLine(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF797979),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (value != null) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF797979),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             VolnaIcon(
                 imageVector = Icons.ArrowRight,
                 contentDescription = null,
-                tint = Color(0xFF797979),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 size = 16.dp,
             )
         }

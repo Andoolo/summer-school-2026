@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Тема нужна прелоадеру раньше, чем загрузится приложение: иначе тот, кто выбрал
+        // тёмную тему, секунду смотрел бы на белый экран. Ключ и значения — те же, что
+        // пишет PlatformThemeStorage.wasm.kt.
+        (function () {
+            var saved = null;
+            try { saved = localStorage.getItem("apex_theme"); } catch (e) {}
+            var dark = saved === "Dark" ||
+                (saved !== "Light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+            if (dark) document.documentElement.setAttribute("data-theme", "dark");
+        })();
+    </script>
     <title>Апекс · картинг</title>
     <style>
         html, body {
@@ -179,6 +191,14 @@
             border-radius: 50%;
             background: #E10600;
         }
+
+        /* --- тёмная тема: цвета из VolnaDarkColors --- */
+        html[data-theme="dark"], html[data-theme="dark"] #loading-overlay { background-color: #15151E; }
+        html[data-theme="dark"] .loader-brand { color: #F2F2F5; }
+        html[data-theme="dark"] .loader-lights b { background: #3A3A48; }
+        html[data-theme="dark"] .loader-road { background: #34343E; }
+        /* кузов графитовый и на графитовом фоне теряет силуэт — даём ему тонкий светлый контур */
+        html[data-theme="dark"] .loader-kart { filter: drop-shadow(0 0 1px rgba(242, 242, 245, .6)); }
 
         @media (prefers-reduced-motion: reduce) {
             .loader-lights b, .loader-kart, .loader-kart .whl,

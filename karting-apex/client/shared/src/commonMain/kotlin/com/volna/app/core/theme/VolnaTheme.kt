@@ -7,7 +7,6 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -72,16 +71,28 @@ val LocalVolnaTokens = staticCompositionLocalOf {
 
 @Composable
 fun VolnaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    mode: ThemeMode = ThemeMode.System,
     content: @Composable () -> Unit,
 ) {
-    val tokens = VolnaTokens(colors = VolnaLightColors)
+    val darkTheme = when (mode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    val tokens = VolnaTokens(colors = if (darkTheme) VolnaDarkColors else VolnaLightColors)
     androidx.compose.runtime.CompositionLocalProvider(LocalVolnaTokens provides tokens) {
         MaterialTheme(
             colorScheme = tokens.colors.toMaterialColorScheme(darkTheme),
             typography = Typography(),
-            content = content,
-        )
+        ) {
+            // Text без явного цвета берёт LocalContentColor, а по умолчанию это чёрный —
+            // его задаёт только Surface, которым экраны не обёрнуты. В светлой теме это
+            // было незаметно, в тёмной такие заголовки пропадали на графите.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides tokens.colors.textPrimary,
+                content = content,
+            )
+        }
     }
 }
 
@@ -90,6 +101,13 @@ object VolnaTheme {
         @Composable get() = LocalVolnaTokens.current
 }
 
+/**
+ * Переводит палитру «Апекса» в схему Material.
+ *
+ * Контейнерные поверхности (surfaceContainer*) заданы явно. Раньше они брались из
+ * стандартной схемы Material, а там они с сиреневым оттенком: диалоги и шторки
+ * получали чужой цвет, а в тёмной теме — фиолетово-серый поверх графита.
+ */
 private fun VolnaColorScheme.toMaterialColorScheme(darkTheme: Boolean): ColorScheme {
     val base = if (darkTheme) {
         androidx.compose.material3.darkColorScheme()
@@ -100,13 +118,22 @@ private fun VolnaColorScheme.toMaterialColorScheme(darkTheme: Boolean): ColorSch
         primary = brand,
         onPrimary = onBrand,
         background = background,
-        surface = surface,
-        surfaceVariant = surfaceVariant,
         onBackground = textPrimary,
+        surface = surface,
         onSurface = textPrimary,
+        surfaceVariant = surfaceVariant,
         onSurfaceVariant = textSecondary,
+        surfaceTint = surface,
+        surfaceContainerLowest = surface,
+        surfaceContainerLow = surface,
+        surfaceContainer = surface,
+        surfaceContainerHigh = if (darkTheme) surfaceVariant else surface,
+        surfaceContainerHighest = surfaceVariant,
+        inverseSurface = textPrimary,
+        inverseOnSurface = background,
         outline = border,
+        outlineVariant = border,
         error = error,
-        onError = Color.White,
+        onError = onError,
     )
 }

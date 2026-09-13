@@ -185,15 +185,15 @@ private fun SlotDetailsSheetContent(
                 modifier = Modifier
                     .width(40.dp)
                     .height(4.dp)
-                    .background(Color(0xFFCCCCCC).copy(alpha = 0.4f), RoundedCornerShape(VolnaTheme.tokens.radius.lg)),
+                    .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.lg)),
             )
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
-                SlotTag(text = slot.route.type.toTagText(), color = Color(0xFF92FF9A))
+                SlotTag(text = slot.route.type.toTagText(), color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType)
                 SlotTag(
                     text = slot.route.name,
-                    color = Color(0xFFFFF897),
+                    color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                     modifier = Modifier.weight(1f, fill = false),
                 )
             }
@@ -282,7 +282,7 @@ private fun SlotDetailsSheetContent(
                 modifier = Modifier
                     .width(138.dp)
                     .height(4.dp)
-                    .background(Color(0xFFCCCCCC), RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+                    .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
             )
         }
     }
@@ -337,13 +337,15 @@ private fun SlotDetailsMapCard(
  */
 @Composable
 private fun CheckeredFlagMark(size: androidx.compose.ui.unit.Dp = 14.dp) {
+    // Цвет текста, а не чёрный: на графите тёмные клетки флага пропали бы.
+    val ink = MaterialTheme.colorScheme.onSurface
     Canvas(Modifier.size(size)) {
         val cell = this.size.width / 4f
         for (row in 0 until 4) {
             for (col in 0 until 4) {
                 if ((row + col) % 2 == 0) {
                     drawRect(
-                        color = Color(0xFF161616),
+                        color = ink,
                         topLeft = Offset(col * cell, row * cell),
                         size = androidx.compose.ui.geometry.Size(cell, cell),
                     )

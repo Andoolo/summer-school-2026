@@ -135,7 +135,7 @@ private fun BookingFormContent(
                 .width(138.dp)
                 .height(4.dp)
                 .align(androidx.compose.ui.Alignment.CenterHorizontally)
-                .background(Color(0xFFCCCCCC), RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+                .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
         )
         Spacer(Modifier.height(VolnaTheme.tokens.spacing.xs))
     }
@@ -160,10 +160,10 @@ private fun BookingSlotSummaryCard(slot: Slot) {
             color = MaterialTheme.colorScheme.onSurface,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
-            SlotTag(text = slot.route.type.toTagText(), color = Color(0xFF92FF9A))
+            SlotTag(text = slot.route.type.toTagText(), color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType)
             SlotTag(
                 text = slot.route.name,
-                color = Color(0xFFFFF897),
+                color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                 modifier = Modifier.weight(1f, fill = false),
             )
             SlotTag(
@@ -453,7 +453,7 @@ private fun BookingSuccessSheet(
                 .padding(top = VolnaTheme.tokens.spacing.lg, bottom = VolnaTheme.tokens.spacing.xs)
                 .width(138.dp)
                 .height(4.dp)
-                .background(Color(0xFFCCCCCC), RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+                .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
         )
     }
 }
@@ -485,10 +485,10 @@ private fun BookingSuccessSummaryCard(
             )
             slot?.let {
                 Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
-                    SlotTag(text = it.route.type.toTagText(), color = Color(0xFF92FF9A))
+                    SlotTag(text = it.route.type.toTagText(), color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType)
                     SlotTag(
                         text = it.route.name,
-                        color = Color(0xFFFFF897),
+                        color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     SlotTag(
@@ -609,6 +609,7 @@ private fun CircleActionButton(
 private fun SlotTag(
     text: String,
     color: Color,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier,
 ) {
     Text(
@@ -620,7 +621,7 @@ private fun SlotTag(
             )
             .padding(horizontal = VolnaTheme.tokens.spacing.xs, vertical = VolnaTheme.tokens.spacing.xxs),
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = contentColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )

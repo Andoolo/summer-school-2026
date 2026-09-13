@@ -19,16 +19,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.domain.model.GeoPoint
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
 
-private val AsphaltColor = Color(0xFF2B2B2E)
 private val KerbRedColor = Color(0xFFE10600)
 private val CenterLineColor = Color(0x8CFFFFFF)
-private val BackgroundColor = Color(0xFFF2F2F4)
 
 /**
  * Мини-схема трассы: рисует НАСТОЯЩИЙ контур из geometry, а не декоративную заглушку.
@@ -58,11 +57,15 @@ fun TrackMinimap(
         prepareMinimap(points + listOfNotNull(meetingPoint))
     } ?: return
 
+    // Цвета плашки и полотна из темы: светлая плашка на тёмном экране светилась бы фонарём.
+    val backgroundColor = VolnaTheme.tokens.colors.trackBackground
+    val asphaltColor = VolnaTheme.tokens.colors.trackAsphalt
+
     Canvas(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .background(BackgroundColor, RoundedCornerShape(cornerRadius)),
+            .background(backgroundColor, RoundedCornerShape(cornerRadius)),
     ) {
         val all = prepared.toCanvas(
             width = size.width,
@@ -83,7 +86,7 @@ fun TrackMinimap(
         // Полотно трассы — широкая тёмная линия, поверх неё тонкая осевая разметка.
         drawPath(
             path = path,
-            color = AsphaltColor,
+            color = asphaltColor,
             style = Stroke(width = trackWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
         drawPath(

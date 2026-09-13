@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,7 @@ import com.volna.app.catalog.presentation.SlotListState
 import com.volna.app.catalog.presentation.TrackIntent
 import com.volna.app.catalog.presentation.TrackScreen
 import com.volna.app.catalog.presentation.TrackState
+import com.volna.app.core.theme.ThemeController
 import com.volna.app.marshal.presentation.MarshalIntent
 import com.volna.app.marshal.presentation.MarshalScreen
 import com.volna.app.marshal.presentation.MarshalState
@@ -63,6 +65,7 @@ import com.volna.app.uikit.icons.VolnaIcon
 import com.volna.app.auth.presentation.AuthIntent
 import com.volna.app.auth.presentation.AuthScreen
 import com.volna.app.auth.presentation.AuthState
+import org.koin.compose.koinInject
 
 @Composable
 internal fun MainTabs(
@@ -229,11 +232,15 @@ internal fun MainTabs(
                 }
 
                 composable<ProfileDestination> {
+                    val themeController = koinInject<ThemeController>()
+                    val themeMode by themeController.mode.collectAsState()
                     ProfileScreen(
                         state = profileState,
                         appConfig = appConfig,
                         onIntent = onProfileIntent,
                         onOpenMarshal = { navController.navigate(MarshalDestination) },
+                        themeMode = themeMode,
+                        onThemeModeChange = themeController::select,
                     )
                 }
             }

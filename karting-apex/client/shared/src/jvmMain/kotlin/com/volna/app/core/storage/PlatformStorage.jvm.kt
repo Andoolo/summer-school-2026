@@ -31,3 +31,13 @@ actual object PlatformMarshalStorage : MarshalTokenStorage {
         token = null
     }
 }
+
+actual object PlatformThemeStorage : ThemePreferenceStorage {
+    private var value: String? = null
+
+    actual override fun read(): String? = value
+
+    actual override fun write(value: String) {
+        this.value = value
+    }
+}

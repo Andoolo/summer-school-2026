@@ -246,10 +246,10 @@ private fun BookingCard(
         Column(verticalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
             Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
                 slot?.let {
-                    BookingTag(text = it.route.type.toTagText(), color = Color(0xFF92FF9A))
+                    BookingTag(text = it.route.type.toTagText(), color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType)
                     BookingTag(
                         text = it.route.name,
-                        color = Color(0xFFFFF897),
+                        color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }
@@ -304,6 +304,7 @@ internal fun BookingPreviewPhoto() {
 internal fun BookingTag(
     text: String,
     color: Color,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier,
 ) {
     Text(
@@ -312,7 +313,7 @@ internal fun BookingTag(
             .background(color, RoundedCornerShape(VolnaTheme.tokens.radius.sm))
             .padding(horizontal = VolnaTheme.tokens.spacing.xs, vertical = VolnaTheme.tokens.spacing.xxs),
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = contentColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -327,12 +328,12 @@ private fun BookingStatusBadge(status: String) {
             .fillMaxWidth()
             .height(36.dp)
             .background(
-                color = if (active) Color(0xFFE4FFE5) else MaterialTheme.colorScheme.surface,
+                color = if (active) VolnaTheme.tokens.colors.successContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
             .padding(top = 9.dp),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (active) Color(0xFF007108) else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (active) VolnaTheme.tokens.colors.onSuccessContainer else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }

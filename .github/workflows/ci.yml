@@ -129,3 +129,9 @@ jobs:
 
       - name: compile shared (common + wasmJs)
         run: ./gradlew :shared:compileKotlinWasmJs --console=plain
+
+      - name: compile Android app (apex)
+        # Платформенный код Android (хранилища токенов и темы, MainActivity) иначе не
+        # компилируется нигде: локально нет Android SDK. На ubuntu-раннере SDK уже стоит.
+        if: matrix.app == 'apex'
+        run: ./gradlew :androidApp:compileDebugKotlin --console=plain

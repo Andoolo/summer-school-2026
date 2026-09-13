@@ -117,7 +117,7 @@ private fun SlotFiltersSheet(
                         .width(40.dp)
                         .height(4.dp)
                         .background(
-                            color = Color(0xFFCCCCCC).copy(alpha = 0.4f),
+                            color = VolnaTheme.tokens.colors.handle,
                             shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
                         ),
                 )
@@ -209,7 +209,7 @@ private fun SlotFiltersSheet(
                 modifier = Modifier
                     .width(138.dp)
                     .height(4.dp)
-                    .background(Color(0xFFCCCCCC), RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+                    .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
             )
             Spacer(Modifier.height(VolnaTheme.tokens.spacing.xs))
         }
@@ -428,11 +428,11 @@ private fun SlotCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
                     SlotTag(
                         text = slot.route.type.toTagText(),
-                        color = Color(0xFF92FF9A),
+                        color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType,
                     )
                     SlotTag(
                         text = slot.route.name,
-                        color = Color(0xFFFFF897),
+                        color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                 }

@@ -152,7 +152,7 @@ private fun BookingDetailsContent(
                 .width(138.dp)
                 .height(4.dp)
                 .align(androidx.compose.ui.Alignment.CenterHorizontally)
-                .background(Color(0xFFCCCCCC), RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+                .background(VolnaTheme.tokens.colors.handle, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
         )
         Spacer(Modifier.height(VolnaTheme.tokens.spacing.xs))
     }
@@ -184,10 +184,10 @@ private fun BookingDetailsEventCard(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs)) {
             slot?.let {
-                BookingTag(text = it.route.type.toTagText(), color = Color(0xFF92FF9A))
+                BookingTag(text = it.route.type.toTagText(), color = VolnaTheme.tokens.colors.tagRouteType, contentColor = VolnaTheme.tokens.colors.onTagRouteType)
                 BookingTag(
                     text = it.route.name,
-                    color = Color(0xFFFFF897),
+                    color = VolnaTheme.tokens.colors.tagRouteName, contentColor = VolnaTheme.tokens.colors.onTagRouteName,
                     modifier = Modifier.weight(1f, fill = false),
                 )
             }
@@ -218,13 +218,13 @@ private fun BookingStatusPill(
             .width(100.dp)
             .height(36.dp)
             .background(
-                color = if (active) Color(0xFFE4FFE5) else MaterialTheme.colorScheme.surface,
+                color = if (active) VolnaTheme.tokens.colors.successContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(10.dp),
             )
             .padding(top = 9.dp),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (active) Color(0xFF007108) else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (active) VolnaTheme.tokens.colors.onSuccessContainer else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -408,7 +408,7 @@ private fun CancelConfirmSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        color = Color(0xFFF2F2F2),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
                     )
                     .padding(VolnaTheme.tokens.spacing.sm),

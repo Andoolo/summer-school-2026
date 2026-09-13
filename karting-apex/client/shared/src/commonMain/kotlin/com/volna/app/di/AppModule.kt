@@ -20,6 +20,9 @@ import com.volna.app.catalog.presentation.SlotDetailsStore
 import com.volna.app.catalog.presentation.TrackStore
 import com.volna.app.core.storage.MarshalTokenStorage
 import com.volna.app.core.storage.PlatformMarshalStorage
+import com.volna.app.core.storage.PlatformThemeStorage
+import com.volna.app.core.storage.ThemePreferenceStorage
+import com.volna.app.core.theme.ThemeController
 import com.volna.app.marshal.MarshalRepository
 import com.volna.app.marshal.data.KtorMarshalRepository
 import com.volna.app.marshal.presentation.MarshalStore
@@ -51,6 +54,8 @@ val volnaAppModule = module {
     single<AppClock> { SystemAppClock }
     single<SessionStorage> { PlatformSessionStorage }
     single<MarshalTokenStorage> { PlatformMarshalStorage }
+    single<ThemePreferenceStorage> { PlatformThemeStorage }
+    single { ThemeController(get()) }
     single<MarshalRepository> { KtorMarshalRepository(get()) }
     single<SessionRepository> { DefaultSessionRepository(get()) }
     single {

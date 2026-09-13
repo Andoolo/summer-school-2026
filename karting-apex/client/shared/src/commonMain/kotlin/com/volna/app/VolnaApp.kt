@@ -17,6 +17,7 @@ import com.volna.app.auth.presentation.AuthIntent
 import com.volna.app.auth.presentation.AuthStore
 import com.volna.app.booking.presentation.*
 import com.volna.app.catalog.presentation.*
+import com.volna.app.core.theme.ThemeController
 import com.volna.app.marshal.presentation.MarshalIntent
 import com.volna.app.marshal.presentation.MarshalStore
 import com.volna.app.core.config.AppConfig
@@ -39,7 +40,9 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VolnaApp() {
-    VolnaTheme {
+    val themeController = koinInject<ThemeController>()
+    val themeMode by themeController.mode.collectAsState()
+    VolnaTheme(mode = themeMode) {
         val appScope = rememberCoroutineScope()
         val navController = rememberNavController()
         val appConfig = koinInject<AppConfig>()
