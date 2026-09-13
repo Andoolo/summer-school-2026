@@ -85,13 +85,22 @@ func TestVerifyCodeRejectsConsumedCode(t *testing.T) {
 type fakeRepo struct {
 	latestOTP OTP
 	attempts  int
+	stats     OTPStats
+	created   int
 }
 
 func (r *fakeRepo) LatestOTP(context.Context, string, string) (OTP, bool, error) {
 	return r.latestOTP, true, nil
 }
 
-func (r *fakeRepo) CreateOTP(context.Context, string, string, string, time.Time) error { return nil }
+func (r *fakeRepo) CreateOTP(context.Context, string, string, string, time.Time) error {
+	r.created++
+	return nil
+}
+
+func (r *fakeRepo) OTPStats(context.Context, string, string, time.Time) (OTPStats, error) {
+	return r.stats, nil
+}
 
 func (r *fakeRepo) ConsumeOTP(context.Context, string, time.Time) error { return nil }
 

@@ -33,6 +33,14 @@ type Config struct {
 	// Так открытую запись в чужие результаты нельзя оставить по недосмотру —
 	// её нужно включить осознанно, задав переменную окружения.
 	MarshalToken string
+	// RateLimit — лимиты запросов с одного IP. По умолчанию включены в production и
+	// выключены в dev (там k6 и ручные проверки шлют всё с одного адреса). RATE_LIMIT
+	// = on/off переопределяет умолчание.
+	RateLimit bool
+	// TrustProxy — брать IP клиента из X-Forwarded-For. Включается сам на Render
+	// (платформа всегда выставляет RENDER=true) или явно TRUST_PROXY=true. Без прокси
+	// включать нельзя: заголовок подделывается клиентом.
+	TrustProxy bool
 }
 
 func Load() (Config, error) {
@@ -41,15 +49,26 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	dev := boolFromEnvIsNot("APP_ENV", "production")
+	rateLimit := !dev
+	switch os.Getenv("RATE_LIMIT") {
+	case "on":
+		rateLimit = true
+	case "off":
+		rateLimit = false
+	}
+
 	return Config{
 		HTTPAddr:        stringFromEnv("HTTP_ADDR", ":8080"),
 		DatabaseURL:     stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
 		ShutdownTimeout: shutdownTimeout,
-		Dev:             boolFromEnvIsNot("APP_ENV", "production"),
+		Dev:             dev,
 		AllowedOrigin:   stringFromEnv("ALLOWED_ORIGIN", ""),
 		AutoMigrate:     os.Getenv("AUTO_MIGRATE") == "true",
 		AutoSeed:        os.Getenv("AUTO_SEED") == "true",
 		MarshalToken:    stringFromEnv("MARSHAL_TOKEN", ""),
+		RateLimit:       rateLimit,
+		TrustProxy:      os.Getenv("TRUST_PROXY") == "true" || os.Getenv("RENDER") == "true",
 	}, nil
 }
 

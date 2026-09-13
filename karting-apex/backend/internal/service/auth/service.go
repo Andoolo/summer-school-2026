@@ -60,6 +60,7 @@ type Repository interface {
 	CreateOTP(ctx context.Context, phone, purpose, codeHash string, expiresAt time.Time) error
 	ConsumeOTP(ctx context.Context, id string, now time.Time) error
 	IncrementOTPAttempts(ctx context.Context, id string) error
+	OTPStats(ctx context.Context, phone, purpose string, now time.Time) (OTPStats, error)
 	FindClientByPhone(ctx context.Context, phone string) (Client, bool, error)
 	CreateClient(ctx context.Context, phone string, now time.Time) (Client, error)
 	IssueSession(ctx context.Context, clientID, accessHash, refreshHash string, accessExpiresAt, refreshExpiresAt time.Time) error
@@ -85,6 +86,7 @@ type Service struct {
 	sessionTTL  time.Duration
 	refreshTTL  time.Duration
 	maxAttempts int
+	limits      OTPLimits
 }
 
 func NewService(repo Repository, logger *slog.Logger) *Service {
@@ -100,6 +102,7 @@ func NewService(repo Repository, logger *slog.Logger) *Service {
 		sessionTTL:  24 * time.Hour,
 		refreshTTL:  30 * 24 * time.Hour,
 		maxAttempts: 5,
+		limits:      DefaultOTPLimits(),
 	}
 }
 
@@ -114,6 +117,14 @@ func (s *Service) RequestCode(ctx context.Context, phone string) (RequestCodeRes
 		return RequestCodeResult{}, err
 	}
 	if ok && latest.ConsumedAt == nil && now.Sub(latest.CreatedAt) < s.resendAfter {
+		return RequestCodeResult{}, ErrTooManyRequests
+	}
+	stats, err := s.repo.OTPStats(ctx, phone, loginPurpose, now)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	if !s.limits.AllowRequest(stats) {
+		s.logger.Warn("otp request limit reached", "phone", MaskPhone(phone), "purpose", loginPurpose)
 		return RequestCodeResult{}, ErrTooManyRequests
 	}
 
@@ -135,6 +146,14 @@ func (s *Service) VerifyCode(ctx context.Context, phone, code string) (VerifyCod
 	}
 
 	now := s.now().UTC()
+	stats, err := s.repo.OTPStats(ctx, phone, loginPurpose, now)
+	if err != nil {
+		return VerifyCodeResult{}, err
+	}
+	if !s.limits.AllowVerify(stats) {
+		s.logger.Warn("otp verify limit reached", "phone", MaskPhone(phone), "purpose", loginPurpose)
+		return VerifyCodeResult{}, ErrTooManyRequests
+	}
 	otp, ok, err := s.repo.LatestOTP(ctx, phone, loginPurpose)
 	if err != nil {
 		return VerifyCodeResult{}, err

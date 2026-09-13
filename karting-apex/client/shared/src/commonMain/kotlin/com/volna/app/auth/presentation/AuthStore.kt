@@ -311,13 +311,16 @@ class AuthStore(
     }
 
     private fun requestCodeMessage(failure: AppFailure): String = when {
-        failure.isTooManyRequests() -> "Повторная отправка будет доступна после таймера"
+        // 429 здесь — не только пауза между кодами, но и лимит кодов на номер или адрес
+        // (5 в час): обещание «после таймера» было бы неправдой.
+        failure.isTooManyRequests() -> "Слишком много запросов кода. Попробуйте позже"
         failure == AppFailure.NetworkUnavailable -> "Не удалось загрузить. Проверьте соединение и попробуйте снова"
         else -> "Не удалось войти. Попробуйте ещё раз"
     }
 
     private fun verifyCodeMessage(failure: AppFailure): String = when {
-        failure.isTooManyRequests() -> "Слишком много попыток. Запросите новый код"
+        // Лимит неверных попыток считается на номер, а не на код: новый код не поможет.
+        failure.isTooManyRequests() -> "Слишком много неверных попыток. Попробуйте позже"
         failure.isInvalidCode() -> "Код неверен или просрочен. Запросите новый код"
         failure == AppFailure.NetworkUnavailable -> "Не удалось загрузить. Проверьте соединение и попробуйте снова"
         else -> "Произошла ошибка. Попробуйте позже"

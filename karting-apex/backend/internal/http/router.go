@@ -45,6 +45,10 @@ type RouterOptions struct {
 	// В отличие от devCORSMiddleware (разрешает любой Origin), здесь — строгое сравнение
 	// с одним заранее известным доменом фронтенда. Пусто — CORS в production выключен.
 	AllowedOrigin string
+	// RateLimit включает лимиты запросов с одного IP. nil — выключено: так в тестах и
+	// нагрузочных прогонах k6 все запросы с одного адреса не упираются в лимит.
+	// Лимиты кодов по номеру телефона от этого не зависят — они в сервисах.
+	RateLimit *RateLimitOptions
 }
 
 func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
@@ -70,6 +74,12 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 		router.Use(productionCORSMiddleware(opts.AllowedOrigin))
 	}
 	router.Use(jsonContentTypeMiddleware)
+	router.Use(bodyLimitMiddleware(1 << 20))
+	if opts.RateLimit != nil {
+		// После CORS: ответ 429 тоже должен нести CORS-заголовки, иначе браузер спрячет
+		// его от приложения и оно покажет «нет сети» вместо «слишком много запросов».
+		router.Use(rateLimitMiddleware(*opts.RateLimit))
+	}
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, CodeNotFound, "Запрашиваемый ресурс не найден.", nil)
 	})

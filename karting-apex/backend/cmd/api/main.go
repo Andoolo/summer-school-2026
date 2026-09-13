@@ -78,6 +78,12 @@ func main() {
 	}
 	instructorHandler := handlers.NewInstructorHandler(postgres.NewInstructorRepository(db))
 
+	var rateLimit *httpapi.RateLimitOptions
+	if cfg.RateLimit {
+		rateLimit = &httpapi.RateLimitOptions{TrustProxy: cfg.TrustProxy, Logger: logger}
+		logger.Info("rate limiting enabled", "trust_proxy", cfg.TrustProxy)
+	}
+
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(logger, httpapi.RouterOptions{
@@ -93,8 +99,14 @@ func main() {
 			MarshalRaceRoster: marshalRaceRoster,
 			Dev:               cfg.Dev,
 			AllowedOrigin:     cfg.AllowedOrigin,
+			RateLimit:         rateLimit,
 		}),
+		// Таймауты на всё соединение, а не только на заголовки: иначе медленный клиент
+		// (slowloris) держит соединение сколь угодно долго, отправляя тело по байту.
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

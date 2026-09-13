@@ -46,6 +46,7 @@ type Repository interface {
 	CreateOTP(ctx context.Context, phone, purpose, codeHash string, expiresAt time.Time) error
 	ConsumeOTP(ctx context.Context, id string, now time.Time) error
 	IncrementOTPAttempts(ctx context.Context, id string) error
+	OTPStats(ctx context.Context, phone, purpose string, now time.Time) (auth.OTPStats, error)
 	ChangeClientPhone(ctx context.Context, clientID, newPhone, otpID string, now time.Time) (Client, error)
 	DeleteClientAccount(ctx context.Context, clientID string, now time.Time) error
 }
@@ -57,6 +58,7 @@ type Service struct {
 	codeTTL     time.Duration
 	resendAfter time.Duration
 	maxAttempts int
+	limits      auth.OTPLimits
 }
 
 func NewService(repo Repository, logger *slog.Logger) *Service {
@@ -70,6 +72,7 @@ func NewService(repo Repository, logger *slog.Logger) *Service {
 		codeTTL:     5 * time.Minute,
 		resendAfter: time.Minute,
 		maxAttempts: 5,
+		limits:      auth.DefaultOTPLimits(),
 	}
 }
 
@@ -124,6 +127,15 @@ func (s *Service) RequestPhoneChangeCode(ctx context.Context, token, newPhone st
 	if ok && latest.ConsumedAt == nil && now.Sub(latest.CreatedAt) < s.resendAfter {
 		return RequestPhoneCodeResult{}, ErrTooManyRequests
 	}
+	// Те же лимиты на номер, что и при входе: смена номера — такой же канал выдачи кодов.
+	stats, err := s.repo.OTPStats(ctx, newPhone, phoneChangePurpose, now)
+	if err != nil {
+		return RequestPhoneCodeResult{}, err
+	}
+	if !s.limits.AllowRequest(stats) {
+		s.logger.Warn("otp request limit reached", "phone", auth.MaskPhone(newPhone), "purpose", phoneChangePurpose)
+		return RequestPhoneCodeResult{}, ErrTooManyRequests
+	}
 
 	code, err := randomDigits(otpCodeLength)
 	if err != nil {
@@ -155,6 +167,14 @@ func (s *Service) ConfirmPhoneChange(ctx context.Context, token, newPhone, code 
 	}
 
 	now := s.now().UTC()
+	stats, err := s.repo.OTPStats(ctx, newPhone, phoneChangePurpose, now)
+	if err != nil {
+		return Client{}, err
+	}
+	if !s.limits.AllowVerify(stats) {
+		s.logger.Warn("otp verify limit reached", "phone", auth.MaskPhone(newPhone), "purpose", phoneChangePurpose)
+		return Client{}, ErrTooManyRequests
+	}
 	otp, ok, err := s.repo.LatestOTP(ctx, newPhone, phoneChangePurpose)
 	if err != nil {
 		return Client{}, err
