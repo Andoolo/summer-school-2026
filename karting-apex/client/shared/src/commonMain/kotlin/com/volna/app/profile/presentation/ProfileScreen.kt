@@ -30,6 +30,8 @@ import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.ActionStatus
 import com.volna.app.core.ui.Loadable
 import com.volna.app.core.ui.PhoneNumberVisualTransformation
+import com.volna.app.core.ui.webLabel
+import com.volna.app.core.ui.webSelectionLabel
 import com.volna.app.uikit.icons.ArrowRight
 import com.volna.app.uikit.icons.Edit
 import com.volna.app.uikit.icons.Icons
@@ -331,7 +333,7 @@ private fun ProfileTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         visualTransformation = visualTransformation,
         label = { Text(label) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().webLabel(label),
     )
 }
 
@@ -351,7 +353,16 @@ private fun ProfileInfoRow(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button) { onClick() } else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        onClickLabel = if (isNavigation) null else "Редактировать",
+                        role = Role.Button,
+                    ) { onClick() }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = VolnaTheme.tokens.spacing.md),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -384,7 +395,9 @@ private fun ProfileInfoRow(
         } else {
             VolnaIcon(
                 imageVector = Icons.Edit,
-                contentDescription = "Редактировать",
+                // Действие объявлено через onClickLabel строки; подпись здесь
+                // перекрыла бы в вебе само значение («Сергей»).
+                contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
                 size = VolnaTheme.tokens.spacing.lg,
             )
@@ -429,6 +442,7 @@ private fun ThemeModeSelector(
                             color = if (isSelected) MaterialTheme.colorScheme.background else Color.Transparent,
                             shape = RoundedCornerShape(VolnaTheme.tokens.radius.md),
                         )
+                        .webSelectionLabel(mode.label(), isSelected)
                         .selectable(
                             selected = isSelected,
                             onClick = { onSelect(mode) },

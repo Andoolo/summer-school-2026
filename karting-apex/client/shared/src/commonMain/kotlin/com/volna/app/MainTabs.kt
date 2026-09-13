@@ -50,6 +50,7 @@ import com.volna.app.catalog.presentation.TrackIntent
 import com.volna.app.catalog.presentation.TrackScreen
 import com.volna.app.catalog.presentation.TrackState
 import com.volna.app.core.theme.ThemeController
+import com.volna.app.core.ui.selectionLabel
 import com.volna.app.marshal.presentation.MarshalIntent
 import com.volna.app.marshal.presentation.MarshalScreen
 import com.volna.app.marshal.presentation.MarshalState
@@ -358,7 +359,7 @@ private fun NavItem(
 ) {
     VolnaIcon(
         imageVector = icon,
-        contentDescription = tab.title,
+        contentDescription = selectionLabel(tab.title, selected),
         // selectable + Role.Tab: скринридер объявит «вкладка, выбрано, 1 из 3».
         modifier = Modifier.selectable(selected = selected, role = Role.Tab) { onClick(tab) },
         tint = if (selected) {

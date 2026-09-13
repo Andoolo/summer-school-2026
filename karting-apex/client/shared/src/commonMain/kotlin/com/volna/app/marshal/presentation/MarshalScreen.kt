@@ -39,6 +39,7 @@ import com.volna.app.catalog.presentation.StateArtwork
 import com.volna.app.catalog.presentation.StateMessage
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.Loadable
+import com.volna.app.core.ui.webLabel
 import com.volna.app.domain.model.Slot
 import com.volna.app.marshal.RaceParticipant
 import com.volna.app.marshal.RaceRoster
@@ -102,7 +103,7 @@ private fun TokenGate(state: MarshalState, onIntent: (MarshalIntent) -> Unit) {
         OutlinedTextField(
             value = state.tokenDraft,
             onValueChange = { onIntent(MarshalIntent.TokenDraftChanged(it)) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().webLabel("Токен маршала"),
             label = { Text("Токен маршала") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -329,7 +330,8 @@ private fun ParticipantRow(
                 onValueChange = { onIntent(MarshalIntent.LapDraftChanged(it)) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .height(120.dp)
+                    .webLabel("Времена кругов"),
                 label = { Text("Времена кругов") },
                 placeholder = { Text("44.120\n42.318\n42.990") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

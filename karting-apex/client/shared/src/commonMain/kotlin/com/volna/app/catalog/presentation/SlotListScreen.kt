@@ -15,12 +15,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.Loadable
+import com.volna.app.core.ui.webSelectionLabel
+import com.volna.app.core.ui.webSwitchLabel
 import com.volna.app.domain.model.Instructor
 import com.volna.app.domain.model.RouteType
 import com.volna.app.domain.model.Slot
@@ -114,6 +118,9 @@ private fun SlotFiltersSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Material делает ручку кнопкой «свернуть/развернуть»: без подписи
+                    // скринридер объявлял бы безымянную кнопку.
+                    .semantics { contentDescription = "Ручка шторки" }
                     .padding(top = 8.dp),
                 contentAlignment = androidx.compose.ui.Alignment.TopCenter,
             ) {
@@ -256,6 +263,7 @@ private fun FilterChipButton(
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
             )
             // Чип фильтра — это флажок: скринридер объявит «отмечено / не отмечено».
+            .webSelectionLabel(label, selected)
             .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
             .padding(horizontal = VolnaTheme.tokens.spacing.sm, vertical = 10.dp),
         style = MaterialTheme.typography.bodyLarge,
@@ -316,6 +324,7 @@ private fun AvailabilitySwitchRow(
             .fillMaxWidth()
             // Вся строка — один переключатель. Раньше строка и Switch были двумя
             // отдельными целями фокуса, и скринридер проходил переключатель дважды.
+            .webSwitchLabel("Только со свободными местами", checked)
             .toggleable(value = checked, role = Role.Switch, onValueChange = { onToggle() }),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,

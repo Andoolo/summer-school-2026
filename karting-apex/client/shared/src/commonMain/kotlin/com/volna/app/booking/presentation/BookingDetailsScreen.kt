@@ -9,6 +9,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -373,10 +375,12 @@ private fun CancelConfirmSheet(
         dragHandle = {
             Box(
                 modifier = Modifier
+                    .semantics { contentDescription = "Ручка шторки" }
                     .padding(top = VolnaTheme.tokens.spacing.xs)
                     .size(width = 40.dp, height = 4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        // Был фон карточки с прозрачностью 40% — не виден ни в одной теме.
+                        color = VolnaTheme.tokens.colors.handle,
                         shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
                     ),
             )

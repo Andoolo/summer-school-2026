@@ -7,8 +7,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @Immutable
 data class VolnaSpacing(
@@ -90,6 +92,10 @@ fun VolnaTheme(
             // было незаметно, в тёмной такие заголовки пропадали на графите.
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.material3.LocalContentColor provides tokens.colors.textPrimary,
+                // Фокус с клавиатуры (веб, внешняя клавиатура на планшете) по умолчанию
+                // показывается лишь полупрозрачным слоем — на тёмной карточке его почти не
+                // видно (WCAG 2.4.7). Рамка цвета текста даёт контраст 14:1 и выше.
+                androidx.compose.foundation.LocalIndication provides FocusRingIndication(tokens.colors.textPrimary),
                 content = content,
             )
         }
@@ -136,4 +142,62 @@ private fun VolnaColorScheme.toMaterialColorScheme(darkTheme: Boolean): ColorSch
         error = error,
         onError = onError,
     )
+}
+
+/**
+ * Индикация для clickable/selectable/toggleable: обычная рябь Material плюс рамка, пока
+ * элемент в фокусе клавиатуры. Касание и клик мышью фокус не дают, поэтому рамка видна
+ * только при навигации с клавиатуры.
+ */
+private class FocusRingIndication(
+    private val ringColor: androidx.compose.ui.graphics.Color,
+) : androidx.compose.foundation.IndicationNodeFactory {
+    override fun create(
+        interactionSource: androidx.compose.foundation.interaction.InteractionSource,
+    ): androidx.compose.ui.node.DelegatableNode = FocusRingNode(interactionSource, ringColor)
+
+    override fun equals(other: Any?): Boolean = other is FocusRingIndication && other.ringColor == ringColor
+
+    override fun hashCode(): Int = ringColor.hashCode()
+}
+
+private class FocusRingNode(
+    private val interactionSource: androidx.compose.foundation.interaction.InteractionSource,
+    private val ringColor: androidx.compose.ui.graphics.Color,
+) : androidx.compose.ui.node.DelegatingNode(), androidx.compose.ui.node.DrawModifierNode {
+    private var focused = false
+
+    init {
+        delegate(androidx.compose.material3.ripple().create(interactionSource))
+    }
+
+    override fun onAttach() {
+        coroutineScope.launch {
+            interactionSource.interactions.collect { interaction ->
+                val nowFocused = when (interaction) {
+                    is androidx.compose.foundation.interaction.FocusInteraction.Focus -> true
+                    is androidx.compose.foundation.interaction.FocusInteraction.Unfocus -> false
+                    else -> return@collect
+                }
+                if (nowFocused != focused) {
+                    focused = nowFocused
+                    invalidateDraw()
+                }
+            }
+        }
+    }
+
+    override fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.draw() {
+        drawContent()
+        if (focused) {
+            val stroke = 2.dp.toPx()
+            drawRoundRect(
+                color = ringColor,
+                topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
+                size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+            )
+        }
+    }
 }

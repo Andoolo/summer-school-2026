@@ -14,12 +14,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
+import com.volna.app.core.ui.webSelectionLabel
 import com.volna.app.domain.model.Booking
 import com.volna.app.domain.model.Slot
 import com.volna.app.domain.policy.BookingPriceCalculator
@@ -51,6 +53,7 @@ fun BookingFormScreen(
             CircleActionButton(icon = Icons.Back, contentDescription = "Назад", onClick = onBack)
             Text(
                 text = "Оформление записи",
+                modifier = Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -347,6 +350,7 @@ private fun BoardSegment(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
+            .webSelectionLabel(text, selected)
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { onClick() }
             .wrapContentHeight(androidx.compose.ui.Alignment.CenterVertically),
         textAlign = TextAlign.Center,

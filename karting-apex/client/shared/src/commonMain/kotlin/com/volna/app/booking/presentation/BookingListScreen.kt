@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.Loadable
+import com.volna.app.core.ui.webSelectionLabel
 import com.volna.app.domain.model.Booking
 import com.volna.app.domain.model.BookingId
 import com.volna.app.domain.policy.BookingPriceCalculator
@@ -195,6 +196,7 @@ private fun BookingTabButton(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
             )
+            .webSelectionLabel(text, selected)
             .selectable(selected = selected, role = Role.Tab) { onClick() }
             // Высота минимальная, а не фиксированная: при крупном системном шрифте
             // фиксированная высота с отступом сверху обрезала бы текст.
