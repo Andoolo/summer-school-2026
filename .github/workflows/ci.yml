@@ -125,6 +125,9 @@ jobs:
         # ни браузера, поэтому одинаково запускается и в CI, и на машине разработчика.
         # Android-таргет тоже подошёл бы на ubuntu-раннере, но локально без SDK не заводится,
         # а wasmJs требует поднимать браузер через karma и заметно медленнее.
+        # JVM-таргет есть только у «Апекса»: у клиента «Волны» задачи jvmTest нет, и шаг
+        # падал с «task 'jvmTest' not found». «Волна» проверяется компиляцией ниже.
+        if: matrix.app == 'apex'
         run: ./gradlew :shared:jvmTest --console=plain
 
       - name: compile shared (common + wasmJs)
