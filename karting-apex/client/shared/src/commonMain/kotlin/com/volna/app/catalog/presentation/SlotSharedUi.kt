@@ -15,6 +15,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +78,7 @@ internal fun BackButton(onClick: () -> Unit) {
         contentDescription = "Назад",
         modifier = Modifier
             .offset(x = VolnaTheme.tokens.spacing.md, y = VolnaTheme.tokens.sizing.backButtonY)
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         tint = MaterialTheme.colorScheme.onSurface,
         size = VolnaTheme.tokens.spacing.xl,
     )
@@ -86,7 +89,8 @@ internal fun ScreenTitle(title: String) {
     // Гоночная типографика «Апекс»: сверхжирный курсив с разрядкой.
     Text(
         text = title.uppercase(),
-        modifier = Modifier.fillMaxWidth().padding(26.dp),
+        // heading(): скринридер позволяет перескакивать между заголовками экрана.
+        modifier = Modifier.fillMaxWidth().padding(26.dp).semantics { heading() },
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Black,

@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -15,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,9 +161,10 @@ private fun BookingTabs(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .heightIn(min = 40.dp)
             .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(VolnaTheme.tokens.radius.pill))
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.pill)),
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.pill))
+            .selectableGroup(),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         BookingTabButton(
@@ -186,13 +190,15 @@ private fun BookingTabButton(
         text = text,
         modifier = Modifier
             .width(180.dp)
-            .height(40.dp)
+            .heightIn(min = 40.dp)
             .background(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
             )
-            .clickable { onClick() }
-            .padding(top = 10.dp),
+            .selectable(selected = selected, role = Role.Tab) { onClick() }
+            // Высота минимальная, а не фиксированная: при крупном системном шрифте
+            // фиксированная высота с отступом сверху обрезала бы текст.
+            .wrapContentHeight(Alignment.CenterVertically),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
         color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
@@ -234,7 +240,7 @@ private fun BookingCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(role = Role.Button) { onClick() }
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.spacing.xl),
@@ -326,12 +332,12 @@ private fun BookingStatusBadge(status: String) {
         text = status,
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .heightIn(min = 36.dp)
             .background(
                 color = if (active) VolnaTheme.tokens.colors.successContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
-            .padding(top = 9.dp),
+            .wrapContentHeight(Alignment.CenterVertically),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
         color = if (active) VolnaTheme.tokens.colors.onSuccessContainer else MaterialTheme.colorScheme.onSurfaceVariant,

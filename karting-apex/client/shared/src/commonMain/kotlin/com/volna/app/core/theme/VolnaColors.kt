@@ -12,7 +12,14 @@ data class VolnaColorScheme(
     val surfaceVariant: Color,
     val textPrimary: Color,
     val textSecondary: Color,
+    /** Тонкие разделители. Для границ элементов управления — [outline]. */
     val border: Color,
+    /**
+     * Граница элементов управления: полей ввода, переключателя, контурных кнопок.
+     * Отдельно от [border], потому что WCAG 1.4.11 требует для неё контраст 3:1,
+     * а разделители с таким контрастом выглядели бы тяжело.
+     */
+    val outline: Color,
     val success: Color,
     val warning: Color,
     val error: Color,
@@ -44,14 +51,17 @@ data class VolnaColorScheme(
 
 // Картинг-палитра «Апекс»: гоночный красный + графит (вместо бирюзы «Волны»).
 val VolnaLightColors = VolnaColorScheme(
-    brand = Color(0xFFE10600),
+    // #DC0600, а не #E10600: красная ссылка на серой карточке давала 4.40:1 при норме 4.5.
+    brand = Color(0xFFDC0600),
     onBrand = Color.White,
     background = Color.White,
     surface = Color.White,
     surfaceVariant = Color(0xFFF1F1F1),
     textPrimary = Color(0xFF15151E),
-    textSecondary = Color(0xFF6E6E78),
+    // #66666F: прежний #6E6E78 на карточке #F1F1F1 давал 4.46:1 при норме 4.5.
+    textSecondary = Color(0xFF66666F),
     border = Color(0xFFE5E5E5),
+    outline = Color(0xFF85858F),
     success = Color(0xFF237A4B),
     warning = Color(0xFF9A6400),
     error = Color(0xFFB3261E),
@@ -75,19 +85,22 @@ val VolnaLightColors = VolnaColorScheme(
  * Карточки на ступень светлее фона: на чистом чёрном они бы с ним сливались.
  * Подложка десктопа, наоборот, темнее фона — иначе колонка приложения потерялась бы.
  *
- * Красный светлее, чем в светлой теме: исходный #E10600 на графите даёт контраст
- * 3.65:1 и выглядит тусклым, #FF2A1F — 4.84:1. Цена — белая надпись на красной
- * кнопке: 3.75:1, это норма только для крупного/жирного текста.
+ * Красный светлее, чем в светлой теме: красный текст должен читаться и на фоне, и на
+ * карточке (#FF4136: 5.23:1 и 4.71:1). Но на таком красном белая надпись даёт лишь
+ * 3.46:1 — ниже нормы 4.5, причём общего решения нет: чем светлее красный для
+ * ссылок, тем хуже на нём белый. Поэтому надписи на красных кнопках в тёмной теме
+ * графитовые (5.23:1), как принято в тёмных схемах Material.
  */
 val VolnaDarkColors = VolnaColorScheme(
-    brand = Color(0xFFFF2A1F),
-    onBrand = Color.White,
+    brand = Color(0xFFFF4136),
+    onBrand = Color(0xFF15151E),
     background = Color(0xFF15151E),
     surface = Color(0xFF15151E),
     surfaceVariant = Color(0xFF1F1F2A),
     textPrimary = Color(0xFFF2F2F5),
     textSecondary = Color(0xFF9A9AA6),
     border = Color(0xFF2E2E3A),
+    outline = Color(0xFF72727F),
     success = Color(0xFF4ADE80),
     warning = Color(0xFFFBBF24),
     error = Color(0xFFFF8A80),

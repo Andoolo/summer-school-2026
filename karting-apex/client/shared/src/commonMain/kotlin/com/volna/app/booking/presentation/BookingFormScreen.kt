@@ -2,6 +2,8 @@ package com.volna.app.booking.presentation
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -10,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,19 +208,20 @@ private fun BookingSeatsCard(
             horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xs),
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            BookingCounterButton("−", onMinus)
+            BookingCounterButton("−", "Уменьшить число мест", onMinus)
             Text(
                 text = value.toString(),
                 modifier = Modifier
                     .width(52.dp)
-                    .height(54.dp)
+                    .heightIn(min = 54.dp)
                     .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
-                    .padding(top = 16.dp),
+                    .semantics { contentDescription = "Мест: $value" }
+                    .wrapContentHeight(androidx.compose.ui.Alignment.CenterVertically),
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            BookingCounterButton("+", onPlus)
+            BookingCounterButton("+", "Увеличить число мест", onPlus)
         }
         Text(
             text = "Можно записать до $maxSeats мест",
@@ -228,16 +234,19 @@ private fun BookingSeatsCard(
 @Composable
 private fun BookingCounterButton(
     text: String,
+    description: String,
     onClick: () -> Unit,
 ) {
     Text(
         text = text,
         modifier = Modifier
-            .size(54.dp)
+            .sizeIn(minWidth = 54.dp, minHeight = 54.dp)
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
             .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
-            .clickable { onClick() }
-            .padding(top = 12.dp),
+            // Символ «−» скринридер прочитал бы как «минус» без контекста.
+            .semantics { contentDescription = description }
+            .clickable(role = Role.Button) { onClick() }
+            .wrapContentSize(androidx.compose.ui.Alignment.Center),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.titleLarge,
         color = MaterialTheme.colorScheme.onSurface,
@@ -304,7 +313,8 @@ private fun BookingBoardRow(
         Row(
             modifier = Modifier
                 .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.lg)),
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
+                .selectableGroup(),
         ) {
             BoardSegment(
                 text = "Своя",
@@ -332,13 +342,13 @@ private fun BoardSegment(
         text = text,
         modifier = Modifier
             .width(100.dp)
-            .height(44.dp)
+            .heightIn(min = 44.dp)
             .background(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
-            .clickable(enabled = enabled) { onClick() }
-            .padding(top = 12.dp),
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { onClick() }
+            .wrapContentHeight(androidx.compose.ui.Alignment.CenterVertically),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
         color = when {
@@ -563,7 +573,8 @@ private fun CounterRow(
                 text = "−",
                 modifier = Modifier
                     .size(VolnaTheme.tokens.spacing.xl)
-                    .clickable { onMinus() },
+                    .semantics { contentDescription = "Уменьшить: $title" }
+                    .clickable(role = Role.Button) { onMinus() },
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.headlineSmall,
             )
@@ -572,7 +583,8 @@ private fun CounterRow(
                 text = "+",
                 modifier = Modifier
                     .size(VolnaTheme.tokens.spacing.xl)
-                    .clickable { onPlus() },
+                    .semantics { contentDescription = "Увеличить: $title" }
+                    .clickable(role = Role.Button) { onPlus() },
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.headlineSmall,
             )
@@ -593,7 +605,7 @@ private fun CircleActionButton(
             .size(40.dp)
             .shadow(4.dp, RoundedCornerShape(200.dp))
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(200.dp))
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         VolnaIcon(

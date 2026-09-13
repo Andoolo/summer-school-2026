@@ -14,6 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -261,7 +268,7 @@ private fun AuthHeader(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().semantics { heading() },
             textAlign = TextAlign.Center,
         )
         Text(
@@ -293,6 +300,12 @@ private fun AuthTextField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
+            // Подпись «Телефон» — отдельный Text, с полем она не связана: без этого
+            // скринридер объявил бы просто «поле ввода».
+            modifier = Modifier.semantics {
+                contentDescription = label
+                if (fieldError != null) error(fieldError)
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             visualTransformation = visualTransformation,
@@ -331,6 +344,8 @@ private fun AuthTextField(
         fieldError?.let {
             Text(
                 text = it,
+                // Ошибка появляется после действия, но в другом месте экрана — объявляем её.
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -353,6 +368,10 @@ private fun OtpCodeInput(
         BasicTextField(
             value = value,
             onValueChange = { onValueChange(it.filter(Char::isDigit).take(4)) },
+            modifier = Modifier.semantics {
+                contentDescription = "Код из SMS, 4 цифры"
+                if (fieldError != null) error(fieldError)
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             textStyle = TextStyle(color = Color.Transparent),
@@ -380,6 +399,8 @@ private fun OtpCodeInput(
         fieldError?.let {
             Text(
                 text = it,
+                // Ошибка появляется после действия, но в другом месте экрана — объявляем её.
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -432,7 +453,7 @@ private fun BackButton(
             .size(40.dp)
             .shadow(4.dp, RoundedCornerShape(200.dp))
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(200.dp))
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         VolnaIcon(

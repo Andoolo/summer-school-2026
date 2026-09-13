@@ -131,7 +131,7 @@ private fun VolnaColorScheme.toMaterialColorScheme(darkTheme: Boolean): ColorSch
         surfaceContainerHighest = surfaceVariant,
         inverseSurface = textPrimary,
         inverseOnSurface = background,
-        outline = border,
+        outline = outline,
         outlineVariant = border,
         error = error,
         onError = onError,

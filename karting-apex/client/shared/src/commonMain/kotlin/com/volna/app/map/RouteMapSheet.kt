@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,9 @@ fun RouteMapSheet(
     )
 
     ModalBottomSheet(
+        // Шторка живёт на уровне окна и не знает о колонке приложения: без ограничения
+        // на десктопе она растягивалась шире экрана, из которого открыта.
+        sheetMaxWidth = VolnaTheme.tokens.sizing.screenMaxWidth,
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(
@@ -79,7 +83,7 @@ fun RouteMapSheet(
                 )
                 Text(
                     text = "Закрыть",
-                    modifier = Modifier.clickable { onDismiss() },
+                    modifier = Modifier.clickable(role = Role.Button) { onDismiss() },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )

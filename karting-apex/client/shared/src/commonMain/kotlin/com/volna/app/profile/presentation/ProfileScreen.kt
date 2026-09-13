@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
@@ -71,7 +73,8 @@ fun ProfileScreen(
             text = "Профиль",
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(26.dp),
+                .padding(26.dp)
+                .semantics { heading() },
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
@@ -197,6 +200,7 @@ private fun ProfileViewContent(
         label = "Для персонала",
         value = "Режим маршала",
         onClick = onOpenMarshal,
+        isNavigation = true,
     )
     Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
     ThemeModeSelector(selected = themeMode, onSelect = onThemeModeChange)
@@ -337,6 +341,7 @@ private fun ProfileInfoRow(
     value: String,
     placeholder: Boolean = false,
     onClick: (() -> Unit)? = null,
+    isNavigation: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -346,7 +351,7 @@ private fun ProfileInfoRow(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button) { onClick() } else Modifier)
             .padding(horizontal = VolnaTheme.tokens.spacing.md),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -367,12 +372,23 @@ private fun ProfileInfoRow(
                 color = if (placeholder) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             )
         }
-        VolnaIcon(
-            imageVector = Icons.Edit,
-            contentDescription = "Редактировать",
-            tint = MaterialTheme.colorScheme.onSurface,
-            size = VolnaTheme.tokens.spacing.lg,
-        )
+        // Карандаш у «Режима маршала» обещал редактирование, а строка ведёт на другой
+        // экран — там стрелка, и скринридер не объявит лишнее «Редактировать».
+        if (isNavigation) {
+            VolnaIcon(
+                imageVector = Icons.ArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                size = VolnaTheme.tokens.spacing.lg,
+            )
+        } else {
+            VolnaIcon(
+                imageVector = Icons.Edit,
+                contentDescription = "Редактировать",
+                tint = MaterialTheme.colorScheme.onSurface,
+                size = VolnaTheme.tokens.spacing.lg,
+            )
+        }
     }
 }
 
@@ -508,7 +524,7 @@ private fun InfoLine(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button) { onClick() } else Modifier),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

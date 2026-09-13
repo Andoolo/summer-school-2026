@@ -24,6 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -189,7 +193,7 @@ private fun RaceRow(slot: Slot, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(spacing.xl),
             )
-            .clickable { onClick() }
+            .clickable(role = Role.Button) { onClick() }
             .padding(spacing.md),
         verticalArrangement = Arrangement.spacedBy(spacing.xxs),
     ) {
@@ -373,7 +377,10 @@ private fun ResultBanner(text: String, highlight: Boolean, onDismiss: () -> Unit
                 },
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
             )
-            .clickable { onDismiss() }
+            .clickable(onClickLabel = "Скрыть", role = Role.Button) { onDismiss() }
+            // Сообщение появляется само, без действия пользователя: без liveRegion
+            // скринридер о нём бы промолчал.
+            .semantics { liveRegion = LiveRegionMode.Polite }
             .padding(horizontal = spacing.md, vertical = spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {

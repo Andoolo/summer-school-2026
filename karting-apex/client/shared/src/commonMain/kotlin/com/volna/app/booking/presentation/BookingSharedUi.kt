@@ -10,6 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,7 +47,8 @@ internal fun BookingScreenTitle(title: String) {
         text = title,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(26.dp),
+            .padding(26.dp)
+            .semantics { heading() },
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold,
@@ -58,7 +62,7 @@ internal fun BookingBackButton(onClick: () -> Unit) {
             .size(40.dp)
             .shadow(4.dp, RoundedCornerShape(200.dp))
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(200.dp))
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         VolnaIcon(

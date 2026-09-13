@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -216,12 +217,12 @@ private fun BookingStatusPill(
         text = status,
         modifier = modifier
             .width(100.dp)
-            .height(36.dp)
+            .heightIn(min = 36.dp)
             .background(
                 color = if (active) VolnaTheme.tokens.colors.successContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(10.dp),
             )
-            .padding(top = 9.dp),
+            .wrapContentHeight(androidx.compose.ui.Alignment.CenterVertically),
         textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodyMedium,
         color = if (active) VolnaTheme.tokens.colors.onSuccessContainer else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -254,7 +255,7 @@ private fun BookingDetailsMapCard(
         TrackMinimap(points = trackPoints)
         Text(
             text = "Открыть карту",
-            modifier = Modifier.clickable { onOpenMap() },
+            modifier = Modifier.clickable(role = Role.Button) { onOpenMap() },
             style = MaterialTheme.typography.bodyMedium,
             color = VolnaTheme.tokens.colors.brand,
         )
@@ -355,6 +356,9 @@ private fun CancelConfirmSheet(
     )
 
     ModalBottomSheet(
+        // Шторка живёт на уровне окна и не знает о колонке приложения: без ограничения
+        // на десктопе она растягивалась шире экрана, из которого открыта.
+        sheetMaxWidth = VolnaTheme.tokens.sizing.screenMaxWidth,
         onDismissRequest = {
             if (!state.isCancelling) {
                 onIntent(BookingDetailsIntent.DismissCancel)

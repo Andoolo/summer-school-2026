@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.volna.app.core.theme.VolnaTheme
@@ -47,7 +50,9 @@ fun RouteMapPreviewFallback(
         )
         TrackMinimap(
             points = route.geometry?.points.orEmpty(),
-            modifier = Modifier.clickable { onOpenExternal() },
+            modifier = Modifier
+                .semantics { contentDescription = "Схема трассы с точкой сбора" }
+                .clickable(onClickLabel = "Открыть в картах", role = Role.Button) { onOpenExternal() },
             height = 320.dp,
             cornerRadius = VolnaTheme.tokens.radius.md,
             trackWidth = 18.dp,

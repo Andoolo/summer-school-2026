@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -20,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -320,7 +323,8 @@ private fun FloatingNavigationBar(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
             )
-            .padding(horizontal = VolnaTheme.tokens.spacing.lg),
+            .padding(horizontal = VolnaTheme.tokens.spacing.lg)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -355,7 +359,8 @@ private fun NavItem(
     VolnaIcon(
         imageVector = icon,
         contentDescription = tab.title,
-        modifier = Modifier.clickable { onClick(tab) },
+        // selectable + Role.Tab: скринридер объявит «вкладка, выбрано, 1 из 3».
+        modifier = Modifier.selectable(selected = selected, role = Role.Tab) { onClick(tab) },
         tint = if (selected) {
             MaterialTheme.colorScheme.primary
         } else {

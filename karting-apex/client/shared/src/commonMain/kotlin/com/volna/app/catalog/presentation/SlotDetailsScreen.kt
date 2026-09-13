@@ -18,6 +18,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -152,7 +155,7 @@ private fun CircleActionButton(
             .size(40.dp)
             .shadow(4.dp, RoundedCornerShape(200.dp))
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(200.dp))
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         VolnaIcon(
@@ -313,18 +316,22 @@ private fun SlotDetailsMapCard(
         )
         TrackMinimap(
             points = slot.route.geometry?.points.orEmpty(),
-            modifier = Modifier.clickable { onOpenTrack() },
+            // Схема дублирует ссылку «О трассе»; без подписи скринридер объявил бы её
+            // безымянной кнопкой.
+            modifier = Modifier
+                .semantics { contentDescription = "Схема трассы" }
+                .clickable(onClickLabel = "Открыть паспорт трассы", role = Role.Button) { onOpenTrack() },
         )
         Text(
             text = "О трассе",
-            modifier = Modifier.clickable { onOpenTrack() },
+            modifier = Modifier.clickable(role = Role.Button) { onOpenTrack() },
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             color = VolnaTheme.tokens.colors.brand,
         )
         Text(
             text = "Открыть карту",
-            modifier = Modifier.clickable { onOpenMap() },
+            modifier = Modifier.clickable(role = Role.Button) { onOpenMap() },
             style = MaterialTheme.typography.bodyMedium,
             color = VolnaTheme.tokens.colors.brand,
         )

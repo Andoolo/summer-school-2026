@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +46,7 @@ fun SlotListScreen(
                 modifier = Modifier
                     .align(androidx.compose.ui.Alignment.CenterEnd)
                     .padding(end = VolnaTheme.tokens.sizing.screenMaxWidth - VolnaTheme.tokens.sizing.filterIconX - VolnaTheme.tokens.spacing.xl)
-                    .clickable { onIntent(SlotListIntent.OpenFilters) },
+                    .clickable(role = Role.Button) { onIntent(SlotListIntent.OpenFilters) },
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 size = VolnaTheme.tokens.spacing.xl,
             )
@@ -98,6 +100,9 @@ private fun SlotFiltersSheet(
     )
 
     ModalBottomSheet(
+        // Шторка живёт на уровне окна и не знает о колонке приложения: без ограничения
+        // на десктопе она растягивалась шире экрана, из которого открыта.
+        sheetMaxWidth = VolnaTheme.tokens.sizing.screenMaxWidth,
         onDismissRequest = { onIntent(SlotListIntent.CloseFilters) },
         sheetState = sheetState,
         shape = RoundedCornerShape(
@@ -146,7 +151,7 @@ private fun SlotFiltersSheet(
                     Text("Фильтры", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
                         text = "Сбросить",
-                        modifier = Modifier.clickable { onIntent(SlotListIntent.ResetFilters) },
+                        modifier = Modifier.clickable(role = Role.Button) { onIntent(SlotListIntent.ResetFilters) },
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -245,12 +250,13 @@ private fun FilterChipButton(
     Text(
         text = label,
         modifier = Modifier
-            .height(40.dp)
+            .heightIn(min = 40.dp)
             .background(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
             )
-            .clickable { onClick() }
+            // Чип фильтра — это флажок: скринридер объявит «отмечено / не отмечено».
+            .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
             .padding(horizontal = VolnaTheme.tokens.spacing.sm, vertical = 10.dp),
         style = MaterialTheme.typography.bodyLarge,
         color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
@@ -308,7 +314,9 @@ private fun AvailabilitySwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle() },
+            // Вся строка — один переключатель. Раньше строка и Switch были двумя
+            // отдельными целями фокуса, и скринридер проходил переключатель дважды.
+            .toggleable(value = checked, role = Role.Switch, onValueChange = { onToggle() }),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
@@ -319,7 +327,7 @@ private fun AvailabilitySwitchRow(
         )
         Switch(
             checked = checked,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = null,
         )
     }
 }
@@ -414,7 +422,7 @@ private fun SlotCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(VolnaTheme.tokens.sizing.listCardHeight)
-            .clickable(enabled = canOpen) { onSlotClick(slot) }
+            .clickable(enabled = canOpen, role = Role.Button) { onSlotClick(slot) }
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.spacing.xl),
