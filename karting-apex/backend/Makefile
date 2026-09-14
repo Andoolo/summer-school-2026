@@ -1,4 +1,4 @@
-.PHONY: fmt generate check-generated lint lint-api test run migrate k6-seed k6-smoke k6-booking-300 k6-cancel-300
+.PHONY: fmt generate check-generated lint lint-api test run migrate k6-seed k6-smoke k6-booking-300 k6-cancel-300 k6-waitlist k6-waitlist-check
 
 fmt:
 	gofmt -w ./cmd ./internal
@@ -35,3 +35,11 @@ k6-booking-300:
 
 k6-cancel-300:
 	k6 run k6/cancel_300_vu.js
+
+# Лист ожидания под нагрузкой: 24 держателя мест + 200 ждущих, затем проверка инвариантов
+# (через минуту после окончания — рассыльщик должен сделать последний проход).
+k6-waitlist:
+	k6 run k6/waitlist_300_vu.js
+
+k6-waitlist-check:
+	psql "$${DATABASE_URL:-postgres://volna:volna@localhost:5432/volna?sslmode=disable}" -f k6/waitlist_invariants.sql
