@@ -105,12 +105,20 @@ type PollResult struct {
 }
 
 type Service struct {
-	repo     Repository
-	sessions Sessions
-	bot      Bot
-	logger   *slog.Logger
-	now      func() time.Time
-	username func() string
+	repo      Repository
+	sessions  Sessions
+	bot       Bot
+	logger    *slog.Logger
+	now       func() time.Time
+	username  func() string
+	callbacks func(context.Context, telegram.CallbackQuery) error
+}
+
+// WithCallbacks передаёт нажатия кнопок под сообщениями (например, «Отменить бронь»)
+// обработчику: вебхук у бота один на всё.
+func (s *Service) WithCallbacks(handle func(context.Context, telegram.CallbackQuery) error) *Service {
+	s.callbacks = handle
+	return s
 }
 
 // NewService создаёт сервис. username возвращает имя бота или пустую строку, пока бот
@@ -220,6 +228,12 @@ func textConfirm(code string) string {
 // HandleUpdate обрабатывает сообщение из вебхука. Ошибки отправки сообщения только
 // логируются: вебхук должен ответить Telegram быстро, иначе тот начнёт повторы.
 func (s *Service) HandleUpdate(ctx context.Context, update telegram.Update) error {
+	if update.CallbackQuery != nil {
+		if s.callbacks == nil {
+			return nil
+		}
+		return s.callbacks(ctx, *update.CallbackQuery)
+	}
 	msg := update.Message
 	if msg == nil || msg.From == nil || msg.From.IsBot || msg.Chat.Type != "private" {
 		return nil

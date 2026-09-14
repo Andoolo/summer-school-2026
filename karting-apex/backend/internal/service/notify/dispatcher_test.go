@@ -42,15 +42,17 @@ func (r *fakeRepo) DisableChat(_ context.Context, chatID int64) error {
 }
 
 type fakeBot struct {
-	errs map[int64]error
-	sent []string
+	errs    map[int64]error
+	sent    []string
+	markups []any
 }
 
-func (b *fakeBot) SendMessage(_ context.Context, chatID int64, text string, _ any) error {
+func (b *fakeBot) SendMessage(_ context.Context, chatID int64, text string, markup any) error {
 	if err := b.errs[chatID]; err != nil {
 		return err
 	}
 	b.sent = append(b.sent, text)
+	b.markups = append(b.markups, markup)
 	return nil
 }
 
@@ -213,5 +215,32 @@ func TestUntilStartAndRubles(t *testing.T) {
 		if got := rubles(amount); !strings.HasPrefix(got, want+"\u00a0") && !strings.HasPrefix(got, want+" ") {
 			t.Errorf("rubles(%d) = %q, want prefix %q", amount, got, want)
 		}
+	}
+}
+
+func TestCancelButtonOnlyUnderConfirmAndReminder(t *testing.T) {
+	for _, kind := range []Kind{KindConfirm, KindReminder} {
+		keyboard, ok := Markup(notice(kind, "11111111-1111-1111-1111-111111111111", 1)).(telegram.InlineKeyboard)
+		if !ok || len(keyboard.InlineKeyboard) != 1 || !strings.Contains(keyboard.InlineKeyboard[0][0].CallbackData, "11111111-1111-1111-1111-111111111111") {
+			t.Fatalf("%s markup = %#v, want cancel button", kind, keyboard)
+		}
+	}
+	cancelled := notice(KindCancel, "b", 1)
+	cancelled.Status = "cancelled"
+	if Markup(cancelled) != nil {
+		t.Fatal("cancel notice must not have buttons")
+	}
+	// Подтверждение, пришедшее уже после отмены, кнопку не получает.
+	stale := notice(KindConfirm, "b", 1)
+	stale.Status = "cancelled"
+	if Markup(stale) != nil {
+		t.Fatal("inactive booking must not get a cancel button")
+	}
+
+	repo := &fakeRepo{due: map[Kind][]Notice{KindConfirm: {notice(KindConfirm, "11111111-1111-1111-1111-111111111111", 1)}}}
+	bot := &fakeBot{}
+	newTestDispatcher(repo, bot).RunOnce(context.Background())
+	if len(bot.markups) != 1 || bot.markups[0] == nil {
+		t.Fatalf("dispatcher must send the button, markups = %#v", bot.markups)
 	}
 }

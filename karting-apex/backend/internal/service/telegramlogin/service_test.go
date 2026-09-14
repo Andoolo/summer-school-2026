@@ -422,3 +422,26 @@ func TestStopAndNotifyCommands(t *testing.T) {
 		t.Fatal("/stopall must not disable notifications")
 	}
 }
+
+func TestCallbacksArePassedToHandler(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	press := telegram.Update{CallbackQuery: &telegram.CallbackQuery{ID: "cb", Data: "cancel:x"}}
+
+	// Без обработчика нажатие просто игнорируется.
+	if err := f.service.HandleUpdate(ctx, press); err != nil || len(f.bot.sent) != 0 {
+		t.Fatalf("HandleUpdate(callback) without handler = %v, sent %d", err, len(f.bot.sent))
+	}
+
+	var got []string
+	f.service.WithCallbacks(func(_ context.Context, q telegram.CallbackQuery) error {
+		got = append(got, q.Data)
+		return nil
+	})
+	if err := f.service.HandleUpdate(ctx, press); err != nil || len(got) != 1 || got[0] != "cancel:x" {
+		t.Fatalf("callback handler got %v, err %v", got, err)
+	}
+	if len(f.bot.sent) != 0 {
+		t.Fatal("callback must not trigger login messages")
+	}
+}

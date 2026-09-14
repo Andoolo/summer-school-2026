@@ -44,6 +44,24 @@ func TestClientCallsMethodsAndDecodesResults(t *testing.T) {
 	if gotBody["secret_token"] != "sec" || gotBody["drop_pending_updates"] != true {
 		t.Fatalf("setWebhook body = %v", gotBody)
 	}
+	// Без callback_query Telegram не присылал бы нажатия кнопок.
+	if updates, _ := gotBody["allowed_updates"].([]any); len(updates) != 2 || updates[1] != "callback_query" {
+		t.Fatalf("allowed_updates = %v", gotBody["allowed_updates"])
+	}
+
+	if err := client.AnswerCallbackQuery(context.Background(), "cb-1", "Готово"); err != nil {
+		t.Fatalf("AnswerCallbackQuery() error = %v", err)
+	}
+	if gotBody["callback_query_id"] != "cb-1" || gotBody["text"] != "Готово" {
+		t.Fatalf("answerCallbackQuery body = %v", gotBody)
+	}
+	if err := client.EditMessageReplyMarkup(context.Background(), 42, 7, InlineKeyboard{}); err != nil {
+		t.Fatalf("EditMessageReplyMarkup() error = %v", err)
+	}
+	markup, _ := gotBody["reply_markup"].(map[string]any)
+	if keyboard, ok := markup["inline_keyboard"].([]any); !ok || len(keyboard) != 0 || gotBody["message_id"] != float64(7) {
+		t.Fatalf("editMessageReplyMarkup body = %v, want empty inline_keyboard to remove buttons", gotBody)
+	}
 
 	keyboard := ReplyKeyboard{Keyboard: [][]KeyboardButton{{{Text: "Поделиться номером", RequestContact: true}}}, OneTimeKeyboard: true}
 	if err := client.SendMessage(context.Background(), 42, "Привет", keyboard); err != nil {

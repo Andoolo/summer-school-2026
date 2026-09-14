@@ -143,7 +143,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 
 // deliver возвращает (отправлено, нужно повторить позже).
 func (d *Dispatcher) deliver(ctx context.Context, notice Notice, now time.Time) (bool, bool) {
-	err := d.bot.SendMessage(ctx, notice.ChatID, Text(notice, now), nil)
+	err := d.bot.SendMessage(ctx, notice.ChatID, Text(notice, now), Markup(notice))
 	if err == nil {
 		return true, false
 	}

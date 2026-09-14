@@ -16,10 +16,20 @@ import (
 
 const DefaultAPIBase = "https://api.telegram.org"
 
-// Update — входящее обновление вебхука. Нужны только сообщения.
+// Update — входящее обновление вебхука: сообщение или нажатие кнопки под сообщением.
 type Update struct {
-	UpdateID int64    `json:"update_id"`
-	Message  *Message `json:"message"`
+	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
+}
+
+// CallbackQuery — нажатие кнопки под сообщением бота. Data приходит от клиента Telegram
+// и может быть подделана: доверять можно только From (его подтверждает Telegram).
+type CallbackQuery struct {
+	ID      string   `json:"id"`
+	From    User     `json:"from"`
+	Message *Message `json:"message"`
+	Data    string   `json:"data"`
 }
 
 type Message struct {
@@ -57,6 +67,16 @@ type ReplyKeyboard struct {
 type KeyboardButton struct {
 	Text           string `json:"text"`
 	RequestContact bool   `json:"request_contact,omitempty"`
+}
+
+// InlineKeyboard — кнопки под сообщением.
+type InlineKeyboard struct {
+	InlineKeyboard [][]InlineButton `json:"inline_keyboard"`
+}
+
+type InlineButton struct {
+	Text         string `json:"text"`
+	CallbackData string `json:"callback_data"`
 }
 
 // RemoveKeyboard убирает клавиатуру после входа.
@@ -174,14 +194,36 @@ func (c *Client) GetMe(ctx context.Context) (string, error) {
 	return me.Username, nil
 }
 
-// SetWebhook подключает вебхук. Принимаются только сообщения; накопившиеся за время
-// простоя обновления отбрасываются — старые запросы входа всё равно истекли.
+// SetWebhook подключает вебхук. Принимаются сообщения и нажатия кнопок; накопившиеся за
+// время простоя обновления отбрасываются — старые запросы входа всё равно истекли.
 func (c *Client) SetWebhook(ctx context.Context, url, secret string) error {
 	return c.call(ctx, "setWebhook", map[string]any{
 		"url":                  url,
 		"secret_token":         secret,
-		"allowed_updates":      []string{"message"},
+		"allowed_updates":      []string{"message", "callback_query"},
 		"drop_pending_updates": true,
+	}, nil)
+}
+
+// AnswerCallbackQuery отвечает на нажатие кнопки: убирает «часики» на кнопке и показывает
+// короткую всплывающую подсказку (text может быть пустым).
+func (c *Client) AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string) error {
+	payload := map[string]any{"callback_query_id": callbackQueryID}
+	if text != "" {
+		payload["text"] = text
+	}
+	return c.call(ctx, "answerCallbackQuery", payload, nil)
+}
+
+// EditMessageReplyMarkup меняет кнопки под сообщением; пустая клавиатура их убирает.
+func (c *Client) EditMessageReplyMarkup(ctx context.Context, chatID, messageID int64, markup InlineKeyboard) error {
+	if markup.InlineKeyboard == nil {
+		markup.InlineKeyboard = [][]InlineButton{}
+	}
+	return c.call(ctx, "editMessageReplyMarkup", map[string]any{
+		"chat_id":      chatID,
+		"message_id":   messageID,
+		"reply_markup": markup,
 	}, nil)
 }
 

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"summer-school-2026/backend/internal/service/botactions"
 )
 
 // Трассы в Москве; перехода на летнее время там нет, поэтому хватает фиксированного
@@ -45,6 +47,15 @@ func Text(n Notice, now time.Time) string {
 	}
 	b.WriteString("\n" + footer)
 	return b.String()
+}
+
+// Markup — кнопки под сообщением: отменить можно из подтверждения и из напоминания.
+// Под сообщением об отмене кнопок нет (возвращается nil — поле reply_markup не передаётся).
+func Markup(n Notice) any {
+	if n.Kind == KindCancel || n.Status != "active" {
+		return nil
+	}
+	return botactions.CancelKeyboard(n.BookingID)
 }
 
 // ReminderExpected — получит ли бронь напоминание (то же правило, что в выборке).

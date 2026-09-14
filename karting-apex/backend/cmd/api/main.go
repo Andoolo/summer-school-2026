@@ -15,6 +15,7 @@ import (
 	"summer-school-2026/backend/internal/http/handlers"
 	"summer-school-2026/backend/internal/service/auth"
 	"summer-school-2026/backend/internal/service/booking"
+	"summer-school-2026/backend/internal/service/botactions"
 	"summer-school-2026/backend/internal/service/notify"
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/service/telegramlogin"
@@ -94,8 +95,6 @@ func main() {
 		go connector.Run(ctx)
 		telegramUsername = connector.Username
 		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger)
-		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
-		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
 
 		// Уведомления о бронях идут через того же бота. Слать можно и до подключения
 		// вебхука: отправка сообщений от него не зависит.
@@ -105,6 +104,11 @@ func main() {
 			WithWaitlist(waitlistRepo, waitlist.OfferTTL, cfg.AllowedOrigin)
 		go dispatcher.Run(ctx)
 		onBookingChange = dispatcher.Wake
+		// Кнопка «Отменить бронь» под уведомлениями: нажатия приходят в тот же вебхук.
+		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), botClient, dispatcher.Wake, logger)
+		loginService.WithCallbacks(cancelFromBot.HandleCallback)
+		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
+		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
 		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo), logger, dispatcher.Wake)
 		waitlistStatus, waitlistJoin, waitlistLeave = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave
 		logger.Info("booking notifications and waitlist enabled")
