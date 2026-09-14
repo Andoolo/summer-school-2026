@@ -74,8 +74,8 @@ func (r *TelegramLoginRepository) ConsumeConfirmed(ctx context.Context, pollHash
 UPDATE telegram_login_requests
 SET status = 'consumed'
 WHERE poll_token_hash = $1 AND status = 'confirmed' AND expires_at > $2
-RETURNING confirm_code, status, expires_at, phone, first_name`, pollHash, now).
-		Scan(&request.ConfirmCode, &request.Status, &request.ExpiresAt, &request.Phone, &firstName)
+RETURNING confirm_code, status, expires_at, phone, first_name, chat_id`, pollHash, now).
+		Scan(&request.ConfirmCode, &request.Status, &request.ExpiresAt, &request.Phone, &firstName, &request.ChatID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return telegramlogin.Request{}, false, nil
 	}
@@ -101,6 +101,41 @@ WHERE poll_token_hash = $1`, pollHash).Scan(&request.ConfirmCode, &request.Statu
 		return telegramlogin.Request{}, false, fmt.Errorf("query telegram login: %w", err)
 	}
 	return request, true, nil
+}
+
+// LinkChat переносит чат на клиента с номером: сначала отвязывает его у прежнего
+// клиента (человек сменил номер в Telegram), затем привязывает — в одной транзакции,
+// чтобы не нарушить уникальность чата.
+func (r *TelegramLoginRepository) LinkChat(ctx context.Context, phone string, chatID int64) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin link telegram chat: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `
+UPDATE clients SET telegram_chat_id = NULL
+WHERE telegram_chat_id = $2 AND phone <> $1`, phone, chatID); err != nil {
+		return fmt.Errorf("unlink previous telegram chat owner: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+UPDATE clients SET telegram_chat_id = $2
+WHERE phone = $1 AND deleted_at IS NULL`, phone, chatID); err != nil {
+		return fmt.Errorf("link telegram chat: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit link telegram chat: %w", err)
+	}
+	return nil
+}
+
+func (r *TelegramLoginRepository) SetNotifications(ctx context.Context, chatID int64, enabled bool) (bool, error) {
+	tag, err := r.db.Exec(ctx, `
+UPDATE clients SET telegram_notifications = $2
+WHERE telegram_chat_id = $1 AND deleted_at IS NULL`, chatID, enabled)
+	if err != nil {
+		return false, fmt.Errorf("set telegram notifications: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // DeleteStaleTelegramLogins удаляет запросы входа, истёкшие больше суток назад: в них

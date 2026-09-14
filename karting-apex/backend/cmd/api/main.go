@@ -15,6 +15,7 @@ import (
 	"summer-school-2026/backend/internal/http/handlers"
 	"summer-school-2026/backend/internal/service/auth"
 	"summer-school-2026/backend/internal/service/booking"
+	"summer-school-2026/backend/internal/service/notify"
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/service/telegramlogin"
 	"summer-school-2026/backend/internal/storage/postgres"
@@ -75,6 +76,7 @@ func main() {
 	// кнопка Telegram в приложении не показывается.
 	telegramUsername := func() string { return "" }
 	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
+	onBookingChange := func() {}
 	if cfg.TelegramBotToken != "" {
 		botClient := telegram.NewClient(cfg.TelegramBotToken)
 		if cfg.TelegramAPIBase != "" {
@@ -92,12 +94,19 @@ func main() {
 		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger)
 		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
 		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
+
+		// Уведомления о бронях идут через того же бота. Слать можно и до подключения
+		// вебхука: отправка сообщений от него не зависит.
+		dispatcher := notify.NewDispatcher(postgres.NewNotificationRepository(db), botClient, logger)
+		go dispatcher.Run(ctx)
+		onBookingChange = dispatcher.Wake
+		logger.Info("booking notifications enabled")
 	}
 	authMethods := handlers.AuthMethodsHandler(handlers.AuthMethods{SMS: cfg.Dev, Demo: cfg.DemoLogin, TelegramBotUsername: telegramUsername})
 	profileRepo := postgres.NewProfileRepository(db)
 	profileService := profile.NewService(profileRepo, logger)
 	profileHandler := handlers.NewProfileHandler(profileService)
-	bookingService := booking.NewService(postgres.NewBookingRepository(db))
+	bookingService := booking.NewService(postgres.NewBookingRepository(db)).WithOnChange(onBookingChange)
 	bookingHandler := handlers.NewBookingHandler(bookingService)
 	slotRepo := postgres.NewSlotRepository(db)
 	slotHandler := handlers.NewSlotHandler(slotRepo)

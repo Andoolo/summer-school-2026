@@ -112,12 +112,21 @@ type Repository interface {
 }
 
 type Service struct {
-	repo Repository
-	now  func() time.Time
+	repo     Repository
+	now      func() time.Time
+	onChange func()
 }
 
 func NewService(repo Repository) *Service {
-	return &Service{repo: repo, now: time.Now}
+	return &Service{repo: repo, now: time.Now, onChange: func() {}}
+}
+
+// WithOnChange задаёт сигнал «брони изменились» — по нему рассыльщик уведомлений
+// отправляет подтверждение или отмену сразу, не дожидаясь своего расписания.
+// Сигнал не должен блокировать запрос.
+func (s *Service) WithOnChange(onChange func()) *Service {
+	s.onChange = onChange
+	return s
 }
 
 func (s *Service) Create(ctx context.Context, command CreateCommand) (Booking, error) {
@@ -139,7 +148,12 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (Booking, e
 		}
 	}
 
-	return s.repo.Create(ctx, client.ID, command, requestHash(command), s.now().UTC())
+	created, err := s.repo.Create(ctx, client.ID, command, requestHash(command), s.now().UTC())
+	if err != nil {
+		return Booking{}, err
+	}
+	s.onChange()
+	return created, nil
 }
 
 func (s *Service) List(ctx context.Context, command ListCommand) (BookingList, error) {
@@ -172,7 +186,12 @@ func (s *Service) Cancel(ctx context.Context, token, bookingID string) (Booking,
 	if err != nil {
 		return Booking{}, err
 	}
-	return s.repo.Cancel(ctx, client.ID, bookingID, s.now().UTC())
+	cancelled, err := s.repo.Cancel(ctx, client.ID, bookingID, s.now().UTC())
+	if err != nil {
+		return Booking{}, err
+	}
+	s.onChange()
+	return cancelled, nil
 }
 
 func (s *Service) currentClient(ctx context.Context, token string) (Client, error) {

@@ -1,4 +1,4 @@
-// Package telegram — минимальный клиент Telegram Bot API: только то, что нужно для входа.
+// Package telegram — минимальный клиент Telegram Bot API: вход и уведомления о бронях.
 package telegram
 
 import (
@@ -92,10 +92,33 @@ func WebhookSecret(token string) string {
 type apiResponse struct {
 	OK          bool            `json:"ok"`
 	Result      json.RawMessage `json:"result"`
+	ErrorCode   int             `json:"error_code"`
 	Description string          `json:"description"`
 }
 
 var ErrAPI = errors.New("telegram api error")
+
+// APIError — отказ Bot API с кодом: по нему видно, стоит ли повторять отправку
+// (429, 5xx) или нет (403 — человек заблокировал бота, 400 — чата нет).
+type APIError struct {
+	Method      string
+	Code        int
+	Description string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("%s: %s: %s", ErrAPI, e.Method, e.Description)
+}
+
+func (e *APIError) Is(target error) bool { return target == ErrAPI }
+
+// Permanent — повтор той же отправки ничего не даст.
+func (e *APIError) Permanent() bool {
+	return e.Code == http.StatusBadRequest || e.Code == http.StatusForbidden
+}
+
+// Blocked — человек заблокировал бота или удалил аккаунт.
+func (e *APIError) Blocked() bool { return e.Code == http.StatusForbidden }
 
 func (c *Client) call(ctx context.Context, method string, payload any, result any) error {
 	body, err := json.Marshal(payload)
@@ -123,7 +146,11 @@ func (c *Client) call(ctx context.Context, method string, payload any, result an
 		return fmt.Errorf("telegram %s: http %d, undecodable response", method, resp.StatusCode)
 	}
 	if !decoded.OK {
-		return fmt.Errorf("%w: %s: %s", ErrAPI, method, decoded.Description)
+		code := decoded.ErrorCode
+		if code == 0 {
+			code = resp.StatusCode
+		}
+		return &APIError{Method: method, Code: code, Description: decoded.Description}
 	}
 	if result != nil {
 		if err := json.Unmarshal(decoded.Result, result); err != nil {
@@ -156,6 +183,17 @@ func (c *Client) SetWebhook(ctx context.Context, url, secret string) error {
 		"allowed_updates":      []string{"message"},
 		"drop_pending_updates": true,
 	}, nil)
+}
+
+// BotCommand — пункт меню команд бота.
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+// SetMyCommands задаёт меню команд, которое Telegram показывает у поля ввода.
+func (c *Client) SetMyCommands(ctx context.Context, commands []BotCommand) error {
+	return c.call(ctx, "setMyCommands", map[string]any{"commands": commands}, nil)
 }
 
 // SendMessage отправляет текст без разметки (parse_mode не задан): имя пользователя

@@ -39,6 +39,10 @@ func (noopTelegramRepo) ConsumeConfirmed(context.Context, string, time.Time) (te
 func (noopTelegramRepo) RequestByPollHash(context.Context, string) (telegramlogin.Request, bool, error) {
 	return telegramlogin.Request{}, false, nil
 }
+func (noopTelegramRepo) LinkChat(context.Context, string, int64) error { return nil }
+func (noopTelegramRepo) SetNotifications(context.Context, int64, bool) (bool, error) {
+	return false, nil
+}
 
 type noSessions struct{}
 

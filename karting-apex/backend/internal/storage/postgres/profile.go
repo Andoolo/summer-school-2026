@@ -172,6 +172,7 @@ WHERE client_id = $1 AND status = 'active'`, clientID, now); err != nil {
 UPDATE clients
 SET name = NULL,
     phone = '+1' || lpad(abs(hashtext(id::text))::text, 13, '0'),
+    telegram_chat_id = NULL,
     deleted_at = $2
 WHERE id = $1 AND deleted_at IS NULL`, clientID, now); err != nil {
 		return fmt.Errorf("anonymize client: %w", err)

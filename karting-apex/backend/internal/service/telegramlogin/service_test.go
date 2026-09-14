@@ -15,6 +15,8 @@ import (
 // memoryRepo — простая реализация Repository в памяти с той же семантикой, что у Postgres.
 type memoryRepo struct {
 	requests map[string]*memoryRequest // ключ — pollHash
+	chats    map[string]int64          // номер → привязанный чат
+	notify   map[int64]bool            // чат → уведомления включены
 }
 
 type memoryRequest struct {
@@ -24,7 +26,32 @@ type memoryRequest struct {
 	createdAt time.Time
 }
 
-func newMemoryRepo() *memoryRepo { return &memoryRepo{requests: map[string]*memoryRequest{}} }
+func newMemoryRepo() *memoryRepo {
+	return &memoryRepo{requests: map[string]*memoryRequest{}, chats: map[string]int64{}, notify: map[int64]bool{}}
+}
+
+func (r *memoryRepo) LinkChat(_ context.Context, phone string, chatID int64) error {
+	for otherPhone, chat := range r.chats {
+		if chat == chatID && otherPhone != phone {
+			delete(r.chats, otherPhone)
+		}
+	}
+	r.chats[phone] = chatID
+	if _, ok := r.notify[chatID]; !ok {
+		r.notify[chatID] = true
+	}
+	return nil
+}
+
+func (r *memoryRepo) SetNotifications(_ context.Context, chatID int64, enabled bool) (bool, error) {
+	for _, chat := range r.chats {
+		if chat == chatID {
+			r.notify[chatID] = enabled
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func (r *memoryRepo) CreateLoginRequest(_ context.Context, startHash, pollHash, code string, now, expiresAt time.Time) error {
 	r.requests[pollHash] = &memoryRequest{startHash: startHash, createdAt: now, Request: Request{ConfirmCode: code, Status: "pending", ExpiresAt: expiresAt}}
@@ -35,6 +62,7 @@ func (r *memoryRepo) AttachChat(_ context.Context, startHash string, chatID int6
 	for _, req := range r.requests {
 		if req.startHash == startHash && req.Status == "pending" && now.Before(req.ExpiresAt) && (req.chatID == 0 || req.chatID == chatID) {
 			req.chatID = chatID
+			req.ChatID = chatID
 			return req.Request, true, nil
 		}
 	}
@@ -273,7 +301,7 @@ func TestIgnoresGroupsBotsAndGarbage(t *testing.T) {
 	_ = f.service.HandleUpdate(ctx, privateMessage(3, "/start ../../etc", nil))
 	_ = f.service.HandleUpdate(ctx, privateMessage(3, "привет", nil))
 	for _, msg := range f.bot.sent {
-		if !strings.Contains(msg.text, "бот для входа") {
+		if !strings.Contains(msg.text, "бот приложения «Апекс»") {
 			t.Fatalf("unexpected reply %q", msg.text)
 		}
 	}
@@ -340,8 +368,57 @@ func TestCodeTypedIntoBotGetsHint(t *testing.T) {
 
 	for _, other := range []string{"привет", "12345", "ok", "как войти?"} {
 		_ = f.service.HandleUpdate(ctx, privateMessage(777, other, nil))
-		if reply := f.bot.last(t); !strings.Contains(reply.text, "бот для входа") {
+		if reply := f.bot.last(t); !strings.Contains(reply.text, "бот приложения «Апекс»") {
 			t.Fatalf("reply to %q = %q, want general help", other, reply.text)
 		}
+	}
+}
+
+func TestLoginLinksChatForNotifications(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	started, _ := f.service.Start(ctx)
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "", &telegram.Contact{PhoneNumber: "79991234567", UserID: 777}))
+	if !strings.Contains(f.bot.last(t).text, "/stop") {
+		t.Fatalf("done message must mention notifications, got %q", f.bot.last(t).text)
+	}
+
+	// Чат привязывается только когда приложение забрало сессию, а не при подтверждении в боте.
+	if len(f.repo.chats) != 0 {
+		t.Fatalf("chat linked before poll: %v", f.repo.chats)
+	}
+	if poll, _ := f.service.Poll(ctx, started.PollToken); poll.Status != StatusConfirmed {
+		t.Fatalf("status = %s, want confirmed", poll.Status)
+	}
+	if f.repo.chats["+79991234567"] != 777 {
+		t.Fatalf("chats = %v, want +79991234567 → 777", f.repo.chats)
+	}
+}
+
+func TestStopAndNotifyCommands(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	// Чат, не связанный с аккаунтом, получает объяснение.
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stop", nil))
+	if !strings.Contains(f.bot.last(t).text, "не связан") {
+		t.Fatalf("unlinked /stop reply = %q", f.bot.last(t).text)
+	}
+
+	_ = f.repo.LinkChat(ctx, "+79991234567", 777)
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stop", nil))
+	if f.repo.notify[777] || !strings.Contains(f.bot.last(t).text, "отключены") {
+		t.Fatalf("after /stop notify=%v reply=%q", f.repo.notify[777], f.bot.last(t).text)
+	}
+	// Команда из меню приходит с именем бота.
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/notify@apex_login_bot", nil))
+	if !f.repo.notify[777] || !strings.Contains(f.bot.last(t).text, "включены") {
+		t.Fatalf("after /notify notify=%v reply=%q", f.repo.notify[777], f.bot.last(t).text)
+	}
+	// Похожий текст — не команда.
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stopall", nil))
+	if !f.repo.notify[777] {
+		t.Fatal("/stopall must not disable notifications")
 	}
 }

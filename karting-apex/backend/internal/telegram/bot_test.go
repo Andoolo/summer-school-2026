@@ -81,6 +81,40 @@ func TestClientErrorsNeverContainToken(t *testing.T) {
 	}
 }
 
+func TestClientAPIErrorCarriesCode(t *testing.T) {
+	cases := []struct {
+		body      string
+		status    int
+		permanent bool
+		blocked   bool
+	}{
+		{`{"ok":false,"error_code":403,"description":"Forbidden: bot was blocked by the user"}`, http.StatusForbidden, true, true},
+		{`{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}`, http.StatusBadRequest, true, false},
+		{`{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 3"}`, http.StatusTooManyRequests, false, false},
+		// Без error_code в теле код берётся из HTTP-ответа.
+		{`{"ok":false,"description":"Bad Gateway"}`, http.StatusBadGateway, false, false},
+	}
+	for _, tc := range cases {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tc.status)
+			_, _ = w.Write([]byte(tc.body))
+		}))
+		err := NewClient(testToken).WithAPIBase(server.URL).SendMessage(context.Background(), 1, "x", nil)
+		server.Close()
+
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || !errors.Is(err, ErrAPI) {
+			t.Fatalf("%s: error = %v, want *APIError matching ErrAPI", tc.body, err)
+		}
+		if apiErr.Code != tc.status || apiErr.Permanent() != tc.permanent || apiErr.Blocked() != tc.blocked {
+			t.Fatalf("%s: code=%d permanent=%v blocked=%v", tc.body, apiErr.Code, apiErr.Permanent(), apiErr.Blocked())
+		}
+		if strings.Contains(err.Error(), testToken) {
+			t.Fatalf("API error leaks token: %v", err)
+		}
+	}
+}
+
 func TestWebhookSecretIsStableAndAllowed(t *testing.T) {
 	secret := WebhookSecret(testToken)
 	if secret != WebhookSecret(testToken) || secret == WebhookSecret("other") {

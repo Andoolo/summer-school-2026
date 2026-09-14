@@ -47,10 +47,38 @@ func TestGetDelegatesForbiddenFromRepository(t *testing.T) {
 	}
 }
 
+func TestOnChangeFiresOnlyAfterSuccessfulCreateAndCancel(t *testing.T) {
+	repo := &fakeRepo{clientFound: true}
+	changes := 0
+	service := NewService(repo).WithOnChange(func() { changes++ })
+	ctx := context.Background()
+
+	if _, err := service.Create(ctx, CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 1}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := service.Cancel(ctx, "token", "booking"); err != nil {
+		t.Fatalf("Cancel() error = %v", err)
+	}
+	if changes != 2 {
+		t.Fatalf("changes = %d, want 2", changes)
+	}
+
+	repo.createErr = ErrSlotFull
+	repo.cancelErr = ErrAlreadyCancelled
+	_, _ = service.Create(ctx, CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 1})
+	_, _ = service.Cancel(ctx, "token", "booking")
+	_, _ = service.Create(ctx, CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 9})
+	if changes != 2 {
+		t.Fatalf("changes after failures = %d, want still 2", changes)
+	}
+}
+
 type fakeRepo struct {
 	clientFound   bool
 	clientLookups int
 	getErr        error
+	createErr     error
+	cancelErr     error
 }
 
 func (r *fakeRepo) ClientBySessionTokenHash(context.Context, string) (Client, bool, error) {
@@ -59,7 +87,7 @@ func (r *fakeRepo) ClientBySessionTokenHash(context.Context, string) (Client, bo
 }
 
 func (r *fakeRepo) Create(context.Context, string, CreateCommand, string, time.Time) (Booking, error) {
-	return Booking{}, nil
+	return Booking{}, r.createErr
 }
 
 func (r *fakeRepo) List(context.Context, string, ListCommand) (BookingList, error) {
@@ -71,7 +99,7 @@ func (r *fakeRepo) Get(context.Context, string, string) (Booking, error) {
 }
 
 func (r *fakeRepo) Cancel(context.Context, string, string, time.Time) (Booking, error) {
-	return Booking{}, nil
+	return Booking{}, r.cancelErr
 }
 
 func (r *fakeRepo) ActiveBookingsCount(context.Context, string) (int, error) {

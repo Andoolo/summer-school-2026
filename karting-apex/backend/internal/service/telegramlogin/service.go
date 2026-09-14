@@ -60,6 +60,7 @@ type Request struct {
 	ExpiresAt   time.Time
 	Phone       string
 	FirstName   string
+	ChatID      int64
 }
 
 type Repository interface {
@@ -73,6 +74,12 @@ type Repository interface {
 	// выдаётся ровно один раз, даже при параллельных опросах.
 	ConsumeConfirmed(ctx context.Context, pollHash string, now time.Time) (Request, bool, error)
 	RequestByPollHash(ctx context.Context, pollHash string) (Request, bool, error)
+	// LinkChat запоминает чат за клиентом с этим номером — туда приходят уведомления о
+	// бронях. У другого клиента этот чат отвязывается.
+	LinkChat(ctx context.Context, phone string, chatID int64) error
+	// SetNotifications включает или выключает уведомления для чата; false — чат не
+	// привязан ни к одному клиенту.
+	SetNotifications(ctx context.Context, chatID int64, enabled bool) (bool, error)
 }
 
 // Sessions — выдача сессии по номеру, уже подтверждённому Telegram.
@@ -161,6 +168,12 @@ func (s *Service) Poll(ctx context.Context, pollToken string) (PollResult, error
 		if err != nil {
 			return PollResult{}, err
 		}
+		// Вход состоялся и без привязки чата — не срываем его, просто не будет уведомлений.
+		if request.ChatID != 0 {
+			if err := s.repo.LinkChat(ctx, request.Phone, request.ChatID); err != nil {
+				s.logger.Error("link telegram chat failed", "error", err)
+			}
+		}
 		return PollResult{Status: StatusConfirmed, Session: session}, nil
 	}
 
@@ -175,15 +188,22 @@ func (s *Service) Poll(ctx context.Context, pollToken string) (PollResult, error
 }
 
 const (
-	textHelp = "Это бот для входа в приложение «Апекс».\n\n" +
-		"Откройте приложение и нажмите «Войти через Telegram» — бот пришлёт кнопку для входа."
+	textHelp = "Это бот приложения «Апекс»: вход без кода и уведомления о бронях.\n\n" +
+		"Откройте приложение и нажмите «Войти через Telegram» — бот пришлёт кнопку для входа. " +
+		"После входа сюда будут приходить подтверждения броней и напоминания о заездах.\n\n" +
+		"/stop — отключить уведомления\n/notify — включить снова"
 	textLinkExpired = "Ссылка для входа устарела или уже использована.\n\n" +
 		"Вернитесь в приложение и нажмите «Войти через Telegram» ещё раз."
 	textForeignContact = "Для входа нужен ваш собственный номер. Нажмите кнопку «Поделиться номером» ниже."
 	textNoRequest      = "Запрос на вход не найден или устарел. Начните вход в приложении заново."
 	textBadPhone       = "Не получилось войти с этим номером. Начните вход в приложении заново."
-	textDone           = "Готово! Вернитесь в приложение — вход выполнится автоматически."
-	textCodeNotNeeded  = "Код сверки вводить не нужно — он только для того, чтобы сравнить его с кодом в приложении.\n\n" +
+	textDone           = "Готово! Вернитесь в приложение — вход выполнится автоматически.\n\n" +
+		"Сюда же будут приходить подтверждения броней и напоминания о заездах. Отключить: /stop"
+	textNotifyOff    = "Уведомления о бронях отключены. Включить снова: /notify"
+	textNotifyOn     = "Уведомления о бронях включены. Отключить: /stop"
+	textNotifyNoChat = "Этот чат пока не связан с аккаунтом «Апекса».\n\n" +
+		"Войдите в приложение через Telegram — и бот будет присылать уведомления о бронях."
+	textCodeNotNeeded = "Код сверки вводить не нужно — он только для того, чтобы сравнить его с кодом в приложении.\n\n" +
 		"Если вход уже начат — нажмите кнопку «Поделиться номером» внизу экрана.\n" +
 		"Если нет — вернитесь в приложение и нажмите «Войти через Telegram»."
 	shareButtonText = "📱 Поделиться номером"
@@ -211,6 +231,10 @@ func (s *Service) HandleUpdate(ctx context.Context, update telegram.Update) erro
 		return s.handleContact(ctx, msg, now)
 	case strings.HasPrefix(msg.Text, "/start"):
 		return s.handleStart(ctx, msg, now)
+	case isCommand(msg.Text, "/stop"):
+		return s.handleNotifications(ctx, msg.Chat.ID, false)
+	case isCommand(msg.Text, "/notify"):
+		return s.handleNotifications(ctx, msg.Chat.ID, true)
 	case codeLikePattern.MatchString(strings.TrimSpace(msg.Text)):
 		// Люди пересылают код сверки в бота, думая, что его нужно ввести.
 		s.send(ctx, msg.Chat.ID, textCodeNotNeeded, nil)
@@ -270,6 +294,28 @@ func (s *Service) handleContact(ctx context.Context, msg *telegram.Message, now 
 	s.logger.Info("telegram login confirmed", "phone", auth.MaskPhone(phone))
 	s.send(ctx, msg.Chat.ID, textDone, telegram.RemoveKeyboard{RemoveKeyboard: true})
 	return nil
+}
+
+func (s *Service) handleNotifications(ctx context.Context, chatID int64, enabled bool) error {
+	found, err := s.repo.SetNotifications(ctx, chatID, enabled)
+	if err != nil {
+		return err
+	}
+	switch {
+	case !found:
+		s.send(ctx, chatID, textNotifyNoChat, nil)
+	case enabled:
+		s.send(ctx, chatID, textNotifyOn, nil)
+	default:
+		s.send(ctx, chatID, textNotifyOff, nil)
+	}
+	return nil
+}
+
+// isCommand — текст равен команде, в том числе в виде /stop@имя_бота из меню команд.
+func isCommand(text, command string) bool {
+	text = strings.TrimSpace(text)
+	return text == command || strings.HasPrefix(text, command+"@")
 }
 
 func (s *Service) send(ctx context.Context, chatID int64, text string, markup any) {

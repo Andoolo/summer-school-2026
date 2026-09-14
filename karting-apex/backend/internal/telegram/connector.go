@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Commands — меню команд бота. /start не показываем: вход начинается из приложения.
+var Commands = []BotCommand{
+	{Command: "stop", Description: "Отключить уведомления о бронях"},
+	{Command: "notify", Description: "Включить уведомления о бронях"},
+}
+
 // Connector подключает бота в фоне: узнаёт его имя и регистрирует вебхук. В фоне —
 // чтобы недоступный Telegram не задерживал старт сервиса; до успешного подключения
 // Username пуст, и приложение просто не показывает кнопку Telegram.
@@ -79,5 +85,9 @@ func (c *Connector) connect(ctx context.Context) error {
 	}
 	c.username.Store(&username)
 	c.logger.Info("telegram login enabled", "bot", "@"+username)
+	// Меню команд — удобство, а не условие работы: ошибку только пишем в журнал.
+	if err := c.client.SetMyCommands(callCtx, Commands); err != nil {
+		c.logger.Warn("telegram set bot commands failed", "error", err)
+	}
 	return nil
 }
