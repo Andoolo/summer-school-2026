@@ -132,7 +132,7 @@ func TestWaitlistOffersGoInQueueOrderWithPause(t *testing.T) {
 	// Освободилось одно место — предложение первому (по времени записи) с Telegram.
 	exec(t, db, `UPDATE slots SET free_seats = 1 WHERE id = $1`, laterSlot)
 	offers := claimOffers(t, repo, now, ttl)
-	if len(offers) != 1 || offers[0].ChatID != 301 || offers[0].FreeSeats != 1 || offers[0].RouteName == "" || !offers[0].ExpiresAt.Equal(now.Add(ttl)) {
+	if len(offers) != 1 || offers[0].ChatID != 301 || offers[0].SlotID != laterSlot || offers[0].FreeSeats != 1 || offers[0].RouteName == "" || !offers[0].ExpiresAt.Equal(now.Add(ttl)) {
 		t.Fatalf("first offers = %+v, want anna", offers)
 	}
 	// Пока предложение действует, следующему то же место не предлагаем.

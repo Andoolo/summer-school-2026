@@ -260,13 +260,13 @@ WHERE w.id::text = ANY($2)
   AND s.id = w.slot_id
   AND r.id = s.route_id
   AND i.id = s.instructor_id
-RETURNING w.id::text, c.telegram_chat_id, w.seats_count, s.free_seats, r.name, i.name, s.start_at, s.meeting_point`, now, picked)
+RETURNING w.id::text, w.slot_id::text, c.telegram_chat_id, w.seats_count, s.free_seats, r.name, i.name, s.start_at, s.meeting_point`, now, picked)
 		if err != nil {
 			return nil, fmt.Errorf("mark waitlist offers: %w", err)
 		}
 		for rows.Next() {
 			offer := notify.Offer{ExpiresAt: now.Add(ttl)}
-			if err := rows.Scan(&offer.EntryID, &offer.ChatID, &offer.SeatsWanted, &offer.FreeSeats,
+			if err := rows.Scan(&offer.EntryID, &offer.SlotID, &offer.ChatID, &offer.SeatsWanted, &offer.FreeSeats,
 				&offer.RouteName, &offer.InstructorName, &offer.StartAt, &offer.MeetingPoint); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("scan waitlist offer: %w", err)

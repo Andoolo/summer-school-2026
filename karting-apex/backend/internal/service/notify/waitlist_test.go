@@ -34,7 +34,7 @@ func (w *fakeWaitlist) ExpireOffer(_ context.Context, entryID string, _ time.Tim
 
 func offer(entryID string, chat int64) Offer {
 	return Offer{
-		EntryID: entryID, ChatID: chat, SeatsWanted: 2, FreeSeats: 3, RouteName: "Спортивная трасса",
+		EntryID: entryID, SlotID: "99999999-9999-9999-9999-999999999999", ChatID: chat, SeatsWanted: 2, FreeSeats: 3, RouteName: "Спортивная трасса",
 		InstructorName: "Виктор", StartAt: testNow.Add(5 * time.Hour), MeetingPoint: "Боксы",
 		ExpiresAt: testNow.Add(15 * time.Minute),
 	}
@@ -64,8 +64,8 @@ func TestWaitlistOffersAreSentAndFailuresHandled(t *testing.T) {
 	if strings.Join(wl.released, ",") != "flaky" {
 		t.Fatalf("released = %v", wl.released)
 	}
-	if len(bot.sent) != 1 || !strings.Contains(bot.sent[0], "https://apex.example\n") {
-		t.Fatalf("sent = %q, want app link without trailing slash", bot.sent)
+	if len(bot.sent) != 1 || !strings.Contains(bot.sent[0], "Записаться: https://apex.example/#slot/99999999-9999-9999-9999-999999999999\n") {
+		t.Fatalf("sent = %q, want link straight to the race", bot.sent)
 	}
 }
 
@@ -80,7 +80,7 @@ func TestOfferText(t *testing.T) {
 	text := OfferText(offer("e", 1), 15*time.Minute, "https://apex.example")
 	for _, want := range []string{
 		"Освободилось место", "Спортивная трасса", "Свободно мест: 3, вы ждали: 2",
-		"в течение 15 минут", "до 15:15 (мск)", "не закреплено", "Записаться: https://apex.example", "/stop",
+		"в течение 15 минут", "до 15:15 (мск)", "не закреплено", "Записаться: https://apex.example/#slot/99999999-9999-9999-9999-999999999999", "/stop",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("offer text lacks %q:\n%s", want, text)
@@ -126,5 +126,20 @@ func TestDispatcherReportsToObserver(t *testing.T) {
 	}
 	if len(observer.alerts) != 1 || !strings.Contains(observer.alerts[0], "Рассылка в Telegram сбоит: 3 ошибок") || !strings.Contains(observer.alerts[0], "network: last") {
 		t.Fatalf("alerts = %v", observer.alerts)
+	}
+}
+
+func TestSlotLink(t *testing.T) {
+	cases := []struct{ app, slot, want string }{
+		{"https://apex.example", "99999999-9999-9999-9999-999999999999", "https://apex.example/#slot/99999999-9999-9999-9999-999999999999"},
+		{"https://apex.example", "", "https://apex.example"},
+		{"", "99999999-9999-9999-9999-999999999999", ""},
+		// id всегда uuid, но экранируем на случай мусора: ссылка не должна ломаться.
+		{"https://apex.example", "a b/c", "https://apex.example/#slot/a%20b%2Fc"},
+	}
+	for _, c := range cases {
+		if got := SlotLink(c.app, c.slot); got != c.want {
+			t.Errorf("SlotLink(%q, %q) = %q, want %q", c.app, c.slot, got, c.want)
+		}
 	}
 }

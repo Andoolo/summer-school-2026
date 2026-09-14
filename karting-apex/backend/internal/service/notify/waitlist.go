@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 // Offer — предложение освободившегося места человеку из листа ожидания.
 type Offer struct {
 	EntryID        string
+	SlotID         string
 	ChatID         int64
 	SeatsWanted    int
 	FreeSeats      int
@@ -92,6 +94,20 @@ func (d *Dispatcher) runWaitlist(ctx context.Context) int {
 	return sent
 }
 
+// SlotLink — ссылка сразу на экран заезда в веб-приложении (#slot/<id>), а не на главную:
+// на запись всего 15 минут, искать заезд в каталоге некогда. Если человек не вошёл,
+// приложение откроет заезд после входа.
+func SlotLink(appURL, slotID string) string {
+	switch {
+	case appURL == "":
+		return ""
+	case slotID == "":
+		return appURL
+	default:
+		return appURL + "/#slot/" + url.PathEscape(slotID)
+	}
+}
+
 // OfferText — «освободилось место». Честно говорим, что место не закреплено.
 func OfferText(o Offer, ttl time.Duration, appURL string) string {
 	var b strings.Builder
@@ -102,8 +118,8 @@ func OfferText(o Offer, ttl time.Duration, appURL string) string {
 	b.WriteString("Запишитесь в течение " + strconv.Itoa(minutes) + " минут — до " + o.ExpiresAt.In(moscow).Format("15:04") +
 		" (мск). Потом предложим место следующему в очереди.\n")
 	b.WriteString("Место не закреплено: пока вы не записались, его может занять другой.\n")
-	if appURL != "" {
-		b.WriteString("\nЗаписаться: " + appURL + "\n")
+	if link := SlotLink(appURL, o.SlotID); link != "" {
+		b.WriteString("\nЗаписаться: " + link + "\n")
 	}
 	b.WriteString("\n" + footer)
 	return b.String()

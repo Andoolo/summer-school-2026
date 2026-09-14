@@ -67,8 +67,21 @@ fun VolnaApp() {
         val trackState by trackStore.state.collectAsState()
         val marshalState by marshalStore.state.collectAsState()
         var rootState by remember { mutableStateOf(RootState.CheckingSession) }
+        // Ссылка, открытая до входа: откроем её сразу после входа.
+        var pendingDeepLink by remember { mutableStateOf<DeepLink?>(null) }
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = backStackEntry?.destination
+
+        // Открывает экран по ссылке поверх его вкладки: «Назад» ведёт в каталог, а не на вход.
+        fun openDeepLink(link: DeepLink) {
+            navController.navigate(link.tab) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    inclusive = true
+                }
+                launchSingleTop = true
+            }
+            navController.navigate(link.target)
+        }
 
         fun resetToAuth() {
             appScope.launch {
@@ -225,7 +238,9 @@ fun VolnaApp() {
         }
 
         LaunchedEffect(sessionRepository) {
+            val deepLink = navController.currentBackStackEntry?.deepLink()
             if (sessionRepository.token().isNullOrBlank()) {
+                pendingDeepLink = deepLink
                 rootState = RootState.Ready
                 navController.navigate(AuthDestination) {
                     popUpTo(navController.graph.findStartDestination().id) {
@@ -235,7 +250,9 @@ fun VolnaApp() {
                 }
             } else {
                 rootState = RootState.Ready
-                if (navController.currentDestination.isAuthOrMissing()) {
+                if (deepLink != null) {
+                    openDeepLink(deepLink)
+                } else if (navController.currentDestination.isAuthOrMissing()) {
                     navController.navigate(SlotsDestination) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             inclusive = true
@@ -251,11 +268,17 @@ fun VolnaApp() {
                 when (authStore.effects()) {
                     AuthEffect.Authenticated -> {
                         rootState = RootState.Ready
-                        navController.navigate(SlotsDestination) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                inclusive = true
+                        val link = pendingDeepLink
+                        pendingDeepLink = null
+                        if (link != null) {
+                            openDeepLink(link)
+                        } else {
+                            navController.navigate(SlotsDestination) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
                             }
-                            launchSingleTop = true
                         }
                     }
                 }
