@@ -39,9 +39,24 @@ ON CONFLICT (id) DO UPDATE SET
     instructor_id = EXCLUDED.instructor_id,
     start_at = EXCLUDED.start_at,
     total_seats = EXCLUDED.total_seats,
-    free_seats = EXCLUDED.free_seats,
+    -- Свободные места — не константа из сида, а сидовое значение минус настоящие брони
+    -- на этот заезд. Раньше сид при каждом старте сервиса (на Render — после каждого
+    -- засыпания) затирал счёт мест, и брони пользователей переставали учитываться:
+    -- места «появлялись» заново, а возврат мест при отмене мог выйти за вместимость.
+    -- Демо-брони самого сида не вычитаются: они уже заложены в сидовые цифры.
+    free_seats = GREATEST(0, EXCLUDED.free_seats - (
+        SELECT coalesce(sum(b.seats_count), 0) FROM bookings b
+        WHERE b.slot_id = slots.id
+          AND b.status IN ('active', 'late_cancel')
+          AND b.id::text NOT LIKE 'aa_00000-0000-0000-0000-%'
+    )),
     rental_boards_total = EXCLUDED.rental_boards_total,
-    free_rental_boards = EXCLUDED.free_rental_boards,
+    free_rental_boards = GREATEST(0, EXCLUDED.free_rental_boards - (
+        SELECT coalesce(sum(b.rental_count), 0) FROM bookings b
+        WHERE b.slot_id = slots.id
+          AND b.status IN ('active', 'late_cancel')
+          AND b.id::text NOT LIKE 'aa_00000-0000-0000-0000-%'
+    )),
     price = EXCLUDED.price,
     rental_price = EXCLUDED.rental_price,
     meeting_point = EXCLUDED.meeting_point,

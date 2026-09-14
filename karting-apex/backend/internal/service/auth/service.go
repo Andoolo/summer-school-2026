@@ -32,7 +32,12 @@ type Client struct {
 	Name      *string
 	Phone     string
 	CreatedAt time.Time
+	// DemoExpiresAt не nil у гостевого аккаунта: момент, после которого он удаляется.
+	DemoExpiresAt *time.Time
 }
+
+// IsDemo — гостевой аккаунт.
+func (c Client) IsDemo() bool { return c.DemoExpiresAt != nil }
 
 type RequestCodeResult struct {
 	TTLSeconds         int
@@ -107,7 +112,7 @@ func NewService(repo Repository, logger *slog.Logger) *Service {
 }
 
 func (s *Service) RequestCode(ctx context.Context, phone string) (RequestCodeResult, error) {
-	if !phonePattern.MatchString(phone) {
+	if !phonePattern.MatchString(phone) || IsDemoPhone(phone) {
 		return RequestCodeResult{}, ErrInvalidPhone
 	}
 
@@ -141,7 +146,7 @@ func (s *Service) RequestCode(ctx context.Context, phone string) (RequestCodeRes
 }
 
 func (s *Service) VerifyCode(ctx context.Context, phone, code string) (VerifyCodeResult, error) {
-	if !phonePattern.MatchString(phone) || !codePattern.MatchString(code) {
+	if !phonePattern.MatchString(phone) || !codePattern.MatchString(code) || IsDemoPhone(phone) {
 		return VerifyCodeResult{}, ErrInvalidCode
 	}
 

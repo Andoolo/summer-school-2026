@@ -21,8 +21,10 @@ var (
 	ErrInvalidCode     = errors.New("invalid code")
 	ErrPhoneConflict   = errors.New("phone conflict")
 	ErrTooManyRequests = errors.New("too many requests")
-	phonePattern       = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
-	codePattern        = regexp.MustCompile(`^\d{4,6}$`)
+	// ErrDemoRestricted — действие недоступно гостю: смена номера и удаление аккаунта.
+	ErrDemoRestricted = errors.New("not available for demo guest")
+	phonePattern      = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
+	codePattern       = regexp.MustCompile(`^\d{4,6}$`)
 )
 
 const (
@@ -103,12 +105,16 @@ func (s *Service) UpdateName(ctx context.Context, token, name string) (Client, e
 }
 
 func (s *Service) RequestPhoneChangeCode(ctx context.Context, token, newPhone string) (RequestPhoneCodeResult, error) {
-	if !phonePattern.MatchString(newPhone) {
+	if !phonePattern.MatchString(newPhone) || auth.IsDemoPhone(newPhone) {
 		return RequestPhoneCodeResult{}, ErrInvalidPhone
 	}
 	client, err := s.Current(ctx, token)
 	if err != nil {
 		return RequestPhoneCodeResult{}, err
+	}
+	// Гость со сменой номера превратился бы в постоянный аккаунт в обход входа.
+	if client.IsDemo() {
+		return RequestPhoneCodeResult{}, ErrDemoRestricted
 	}
 	if client.Phone == newPhone {
 		return RequestPhoneCodeResult{}, ErrPhoneConflict
@@ -157,6 +163,9 @@ func (s *Service) ConfirmPhoneChange(ctx context.Context, token, newPhone, code 
 	if err != nil {
 		return Client{}, err
 	}
+	if client.IsDemo() {
+		return Client{}, ErrDemoRestricted
+	}
 	if client.Phone == newPhone {
 		return Client{}, ErrPhoneConflict
 	}
@@ -194,6 +203,10 @@ func (s *Service) DeleteAccount(ctx context.Context, token string) error {
 	client, err := s.Current(ctx, token)
 	if err != nil {
 		return err
+	}
+	// Гость удаляется сам по истечении срока; ручное удаление ему не нужно.
+	if client.IsDemo() {
+		return ErrDemoRestricted
 	}
 	return s.repo.DeleteClientAccount(ctx, client.ID, s.now().UTC())
 }

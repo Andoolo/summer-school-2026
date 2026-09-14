@@ -24,13 +24,13 @@ func NewProfileRepository(db *pgxpool.Pool) *ProfileRepository {
 func (r *ProfileRepository) ClientBySessionTokenHash(ctx context.Context, tokenHash string) (profile.Client, bool, error) {
 	var client profile.Client
 	err := r.db.QueryRow(ctx, `
-SELECT c.id::text, c.name, c.phone, c.created_at
+SELECT c.id::text, c.name, c.phone, c.created_at, c.demo_expires_at
 FROM auth_sessions s
 JOIN clients c ON c.id = s.client_id
 WHERE s.token_hash = $1
   AND s.revoked_at IS NULL
   AND s.expires_at > now()
-  AND c.deleted_at IS NULL`, tokenHash).Scan(&client.ID, &client.Name, &client.Phone, &client.CreatedAt)
+  AND c.deleted_at IS NULL`, tokenHash).Scan(&client.ID, &client.Name, &client.Phone, &client.CreatedAt, &client.DemoExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return profile.Client{}, false, nil
 	}
@@ -46,7 +46,7 @@ func (r *ProfileRepository) UpdateClientName(ctx context.Context, clientID, name
 UPDATE clients
 SET name = $2
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id::text, name, phone, created_at`, clientID, name).Scan(&client.ID, &client.Name, &client.Phone, &client.CreatedAt)
+RETURNING id::text, name, phone, created_at, demo_expires_at`, clientID, name).Scan(&client.ID, &client.Name, &client.Phone, &client.CreatedAt, &client.DemoExpiresAt)
 	if err != nil {
 		return profile.Client{}, fmt.Errorf("update client name: %w", err)
 	}
@@ -142,6 +142,22 @@ func (r *ProfileRepository) DeleteClientAccount(ctx context.Context, clientID st
 		return fmt.Errorf("begin delete account: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	// Блокировка строки клиента: два одновременных удаления иначе оба вернули бы места
+	// поздних отмен, и мест в заезде стало бы больше, чем есть.
+	var locked string
+	err = tx.QueryRow(ctx, `SELECT id::text FROM clients WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, clientID).Scan(&locked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("lock client for delete: %w", err)
+	}
+	// Раньше брони отменялись без возврата мест: удалённый аккаунт навсегда занимал
+	// места в будущих заездах.
+	if err := releaseFutureSeats(ctx, tx, []string{clientID}, now); err != nil {
+		return err
+	}
 
 	if _, err := tx.Exec(ctx, `UPDATE auth_sessions SET revoked_at = $2 WHERE client_id = $1 AND revoked_at IS NULL`, clientID, now); err != nil {
 		return fmt.Errorf("revoke client sessions: %w", err)

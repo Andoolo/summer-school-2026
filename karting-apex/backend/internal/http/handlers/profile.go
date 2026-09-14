@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	httpapi "summer-school-2026/backend/internal/http"
 	profileapi "summer-school-2026/backend/internal/http/openapi/profile"
@@ -107,13 +108,25 @@ func bearerOrUnauthorized(w http.ResponseWriter, r *http.Request) (string, bool)
 	return token, true
 }
 
+// profileClientDTO — клиент по контракту плюс признак гостя: приложение по нему
+// показывает плашку демо-режима и прячет смену номера и удаление аккаунта.
+type profileClientDTO struct {
+	profileapi.Client
+	IsDemo        bool       `json:"is_demo"`
+	DemoExpiresAt *time.Time `json:"demo_expires_at,omitempty"`
+}
+
 func writeProfileClient(w http.ResponseWriter, client profile.Client) {
 	clientID, err := uuid.Parse(client.ID)
 	if err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, profileapi.Client{Id: clientID, Name: client.Name, Phone: client.Phone, CreatedAt: client.CreatedAt})
+	httpapi.WriteJSON(w, http.StatusOK, profileClientDTO{
+		Client:        profileapi.Client{Id: clientID, Name: client.Name, Phone: client.Phone, CreatedAt: client.CreatedAt},
+		IsDemo:        client.IsDemo(),
+		DemoExpiresAt: client.DemoExpiresAt,
+	})
 }
 
 func writeProfileError(w http.ResponseWriter, err error) {
@@ -124,6 +137,8 @@ func writeProfileError(w http.ResponseWriter, err error) {
 		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, "Неверные параметры запроса. Проверьте корректность переданных значений.", nil)
 	case errors.Is(err, profile.ErrPhoneConflict):
 		httpapi.WriteError(w, http.StatusConflict, httpapi.CodePhoneConflict, "Указанный телефон уже используется другим клиентом.", nil)
+	case errors.Is(err, profile.ErrDemoRestricted):
+		httpapi.WriteError(w, http.StatusForbidden, httpapi.CodeForbidden, "В демо-режиме это недоступно. Войдите по своему номеру.", nil)
 	case errors.Is(err, profile.ErrTooManyRequests):
 		httpapi.WriteError(w, http.StatusTooManyRequests, httpapi.CodeTooManyRequests, "Слишком много запросов. Повторите попытку позже.", nil)
 	default:

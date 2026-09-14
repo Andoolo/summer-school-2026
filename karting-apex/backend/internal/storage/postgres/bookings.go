@@ -26,13 +26,13 @@ func NewBookingRepository(db *pgxpool.Pool) *BookingRepository {
 func (r *BookingRepository) ClientBySessionTokenHash(ctx context.Context, tokenHash string) (booking.Client, bool, error) {
 	var client booking.Client
 	err := r.db.QueryRow(ctx, `
-SELECT c.id::text
+SELECT c.id::text, c.demo_expires_at IS NOT NULL
 FROM auth_sessions s
 JOIN clients c ON c.id = s.client_id
 WHERE s.token_hash = $1
   AND s.revoked_at IS NULL
   AND s.expires_at > now()
-  AND c.deleted_at IS NULL`, tokenHash).Scan(&client.ID)
+  AND c.deleted_at IS NULL`, tokenHash).Scan(&client.ID, &client.IsDemo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return booking.Client{}, false, nil
 	}
@@ -221,6 +221,14 @@ func (r *BookingRepository) Get(ctx context.Context, clientID, bookingID string)
 		return booking.Booking{}, booking.ErrNotFound
 	}
 	return created, nil
+}
+
+func (r *BookingRepository) ActiveBookingsCount(ctx context.Context, clientID string) (int, error) {
+	var count int
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM bookings WHERE client_id = $1 AND status = 'active'`, clientID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count active bookings: %w", err)
+	}
+	return count, nil
 }
 
 func (r *BookingRepository) Cancel(ctx context.Context, clientID, bookingID string, now time.Time) (booking.Booking, error) {

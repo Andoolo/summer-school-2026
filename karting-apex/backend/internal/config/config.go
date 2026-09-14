@@ -41,6 +41,9 @@ type Config struct {
 	// Включается сам на Render (платформа всегда выставляет RENDER=true) или явно
 	// TRUST_PROXY=true. Без Cloudflare включать нельзя: заголовок подделывается.
 	TrustProxy bool
+	// DemoLogin — гостевой вход без регистрации. Включён по умолчанию, DEMO_LOGIN=off
+	// выключает.
+	DemoLogin bool
 }
 
 func Load() (Config, error) {
@@ -69,6 +72,7 @@ func Load() (Config, error) {
 		MarshalToken:    stringFromEnv("MARSHAL_TOKEN", ""),
 		RateLimit:       rateLimit,
 		TrustProxy:      os.Getenv("TRUST_PROXY") == "true" || os.Getenv("RENDER") == "true",
+		DemoLogin:       os.Getenv("DEMO_LOGIN") != "off",
 	}, nil
 }
 

@@ -138,6 +138,8 @@ func writeBookingError(w http.ResponseWriter, err error) {
 		httpapi.WriteError(w, http.StatusConflict, httpapi.CodeIdempotencyConflict, "Ключ идемпотентности уже использован для другого запроса.", nil)
 	case errors.Is(err, booking.ErrAlreadyCancelled):
 		httpapi.WriteError(w, http.StatusConflict, httpapi.CodeAlreadyCancelled, "Бронь уже отменена.", nil)
+	case errors.Is(err, booking.ErrDemoBookingLimit):
+		httpapi.WriteError(w, http.StatusForbidden, httpapi.CodeForbidden, "В демо-режиме можно держать не больше двух записей. Отмените одну из них.", nil)
 	case errors.Is(err, booking.ErrForbidden):
 		httpapi.WriteError(w, http.StatusForbidden, httpapi.CodeForbidden, "Доступ запрещён. Вы не можете обращаться к данным другого клиента.", nil)
 	case errors.Is(err, booking.ErrNotFound):

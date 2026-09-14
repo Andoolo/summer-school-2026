@@ -73,3 +73,7 @@ func (r *fakeRepo) Get(context.Context, string, string) (Booking, error) {
 func (r *fakeRepo) Cancel(context.Context, string, string, time.Time) (Booking, error) {
 	return Booking{}, nil
 }
+
+func (r *fakeRepo) ActiveBookingsCount(context.Context, string) (int, error) {
+	return 0, nil
+}

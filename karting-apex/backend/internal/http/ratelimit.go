@@ -35,12 +35,15 @@ type rateRule struct {
 func newRateRules() (general rateRule, byRoute map[string]rateRule) {
 	requestCode := rateRule{name: "request_code", limiter: newWindowLimiter(10, 10*time.Minute)}
 	verifyCode := rateRule{name: "verify_code", limiter: newWindowLimiter(30, 10*time.Minute)}
+	// Каждый гостевой вход — новый аккаунт в базе; живому человеку хватит пары входов.
+	demoLogin := rateRule{name: "demo_login", limiter: newWindowLimiter(5, time.Hour)}
 	return rateRule{name: "general", limiter: newWindowLimiter(300, time.Minute)},
 		map[string]rateRule{
 			"POST /auth/request-code":          requestCode,
 			"POST /profile/phone/request-code": requestCode,
 			"POST /auth/verify-code":           verifyCode,
 			"POST /profile/phone/confirm":      verifyCode,
+			"POST /auth/demo":                  demoLogin,
 		}
 }
 

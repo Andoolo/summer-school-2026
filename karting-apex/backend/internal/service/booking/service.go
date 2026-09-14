@@ -22,11 +22,17 @@ var (
 	ErrNotFound            = errors.New("booking not found")
 	ErrForbidden           = errors.New("booking forbidden")
 	ErrAlreadyCancelled    = errors.New("booking already cancelled")
+	ErrDemoBookingLimit    = errors.New("demo guest booking limit reached")
 )
 
 type Client struct {
-	ID string
+	ID     string
+	IsDemo bool
 }
+
+// DemoMaxActiveBookings — сколько активных броней может держать гость. Без потолка
+// несколько гостей с разных адресов могли бы занять все места в заездах.
+const DemoMaxActiveBookings = 2
 
 type Booking struct {
 	ID          string
@@ -102,6 +108,7 @@ type Repository interface {
 	List(ctx context.Context, clientID string, command ListCommand) (BookingList, error)
 	Get(ctx context.Context, clientID, bookingID string) (Booking, error)
 	Cancel(ctx context.Context, clientID, bookingID string, now time.Time) (Booking, error)
+	ActiveBookingsCount(ctx context.Context, clientID string) (int, error)
 }
 
 type Service struct {
@@ -121,6 +128,15 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (Booking, e
 	client, err := s.currentClient(ctx, command.Token)
 	if err != nil {
 		return Booking{}, err
+	}
+	if client.IsDemo {
+		active, err := s.repo.ActiveBookingsCount(ctx, client.ID)
+		if err != nil {
+			return Booking{}, err
+		}
+		if active >= DemoMaxActiveBookings {
+			return Booking{}, ErrDemoBookingLimit
+		}
 	}
 
 	return s.repo.Create(ctx, client.ID, command, requestHash(command), s.now().UTC())

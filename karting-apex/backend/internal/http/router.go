@@ -26,6 +26,10 @@ type RouterOptions struct {
 	// AuthRefresh — ручной маршрут POST /auth/refresh (обмен refresh-токена).
 	// В сгенерированном транспорте auth его пока нет, поэтому регистрируется отдельно.
 	AuthRefresh http.HandlerFunc
+	// AuthDemo — POST /auth/demo (гостевой вход). nil — выключен.
+	AuthDemo http.HandlerFunc
+	// AuthMethods — GET /auth/methods (какие способы входа показывать в приложении).
+	AuthMethods http.HandlerFunc
 	// RouteLeaderboard — ручной маршрут GET /routes/{routeID}/leaderboard (рекорды трассы, картинг).
 	RouteLeaderboard http.HandlerFunc
 	// RoutePassport — ручной маршрут GET /routes/{routeID} (карточка трассы, картинг F5).
@@ -93,6 +97,12 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.AuthRefresh != nil {
 		router.Post("/auth/refresh", opts.AuthRefresh)
+	}
+	if opts.AuthDemo != nil {
+		router.Post("/auth/demo", opts.AuthDemo)
+	}
+	if opts.AuthMethods != nil {
+		router.Get("/auth/methods", opts.AuthMethods)
 	}
 	if opts.RouteLeaderboard != nil {
 		router.Get("/routes/{routeID}/leaderboard", opts.RouteLeaderboard)
