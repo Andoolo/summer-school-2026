@@ -28,8 +28,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.volna.app.auth.AuthMethods
 import com.volna.app.core.phone.formatPhoneNumber
 import com.volna.app.core.theme.VolnaTheme
+import com.volna.app.core.ui.Loadable
 import com.volna.app.core.ui.PhoneNumberVisualTransformation
 import com.volna.app.uikit.icons.Back
 import com.volna.app.uikit.icons.Icons
@@ -43,6 +45,10 @@ fun AuthScreen(
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        onIntent(AuthIntent.LoadMethods)
+    }
 
     LaunchedEffect(state.message) {
         val message = state.message
@@ -86,10 +92,46 @@ private fun PhoneStep(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         AuthLogo()
-        AuthHeader(
-            title = "Вход",
-            description = "Войдите по номеру телефона, чтобы\nзаписаться на заезд",
-        )
+        when (val methods = state.methods) {
+            Loadable.Initial,
+            Loadable.Loading -> {
+                AuthHeader(title = "Вход", description = "Подключаемся к серверу…")
+                Spacer(Modifier.height(VolnaTheme.tokens.spacing.lg))
+                CircularProgressIndicator()
+                // Бесплатный сервер засыпает без запросов: первое обращение будит его
+                // до минуты. Без пояснения долгий спиннер выглядит как зависание.
+                TermsText("Если сервер спал, первый запуск\nзаймёт до минуты")
+            }
+            is Loadable.Error, is Loadable.Empty -> {
+                AuthHeader(title = "Вход", description = "Не удалось связаться с сервером")
+                Spacer(Modifier.height(VolnaTheme.tokens.spacing.lg))
+                SubmitButton(
+                    text = "Повторить",
+                    loading = false,
+                    enabled = true,
+                    onClick = { onIntent(AuthIntent.LoadMethods) },
+                )
+            }
+            is Loadable.Content -> PhoneStepMethods(state, methods.value, onIntent)
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.PhoneStepMethods(
+    state: AuthState,
+    methods: AuthMethods,
+    onIntent: (AuthIntent) -> Unit,
+) {
+    AuthHeader(
+        title = "Вход",
+        description = if (methods.sms) {
+            "Войдите по номеру телефона, чтобы\nзаписаться на заезд"
+        } else {
+            "Войдите, чтобы записаться на заезд"
+        },
+    )
+    if (methods.sms) {
         AuthTextField(
             value = state.phoneInput,
             onValueChange = { onIntent(AuthIntent.PhoneChanged(it)) },
@@ -112,6 +154,32 @@ private fun PhoneStep(
             enabled = state.canRequestCode,
             onClick = { onIntent(AuthIntent.RequestCode) },
         )
+    }
+    if (methods.demo) {
+        if (methods.sms) {
+            Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+            Text(
+                text = "или",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+        OutlinedButton(
+            onClick = { onIntent(AuthIntent.DemoLogin) },
+            enabled = !state.isSubmitting,
+            shape = RoundedCornerShape(VolnaTheme.tokens.radius.pill),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(VolnaTheme.tokens.sizing.buttonHeight),
+        ) {
+            Text("Посмотреть без регистрации", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        TermsText("Гостевой аккаунт на сутки: можно записаться\nна заезд, данные потом удалятся")
+    }
+    if (!methods.sms && !methods.demo) {
+        TermsText("Вход временно недоступен. Попробуйте позже")
     }
 }
 

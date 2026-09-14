@@ -15,9 +15,22 @@ data class VerifyCodeResult(
     val isNew: Boolean,
 )
 
+/**
+ * Способы входа, которые сейчас доступны. Решает бэкенд: форма входа по SMS не должна
+ * появляться там, где SMS не отправляются, а кнопка Telegram — пока бот не настроен.
+ */
+data class AuthMethods(
+    val sms: Boolean,
+    val demo: Boolean,
+    val telegramBotUsername: String?,
+)
+
 interface AuthRepository {
+    suspend fun authMethods(): Result<AuthMethods>
     suspend fun requestCode(phone: Phone): Result<RequestCodeResult>
     suspend fun verifyCode(phone: Phone, code: String): Result<VerifyCodeResult>
+    /** Гостевой вход: новый временный аккаунт без регистрации. */
+    suspend fun demoLogin(): Result<VerifyCodeResult>
     suspend fun logout(): Result<Unit>
 }
 

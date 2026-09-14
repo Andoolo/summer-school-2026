@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.volna.app.booking.presentation.toBookingCardStartText
 import com.volna.app.core.config.AppConfig
 import com.volna.app.core.logging.AppLogger
 import com.volna.app.core.phone.formatPhoneNumber
@@ -36,6 +37,7 @@ import com.volna.app.uikit.icons.ArrowRight
 import com.volna.app.uikit.icons.Edit
 import com.volna.app.uikit.icons.Icons
 import com.volna.app.uikit.icons.VolnaIcon
+import kotlinx.datetime.Instant
 
 @Composable
 fun ProfileScreen(
@@ -97,6 +99,7 @@ fun ProfileScreen(
                     appConfig = appConfig,
                     clientName = profile.value.name.orEmpty(),
                     phone = profile.value.phone.value,
+                    demoExpiresAt = profile.value.demoExpiresAt.takeIf { profile.value.isDemo },
                     onOpenExternalUrl = openExternalUrl,
                     onIntent = onIntent,
                     onOpenMarshal = onOpenMarshal,
@@ -135,6 +138,7 @@ private fun ProfileContent(
     appConfig: AppConfig,
     clientName: String,
     phone: String,
+    demoExpiresAt: Instant?,
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
     onOpenMarshal: () -> Unit,
@@ -154,6 +158,7 @@ private fun ProfileContent(
                 appConfig = appConfig,
                 clientName = clientName,
                 phone = phone,
+                demoExpiresAt = demoExpiresAt,
                 onOpenExternalUrl = onOpenExternalUrl,
                 onIntent = onIntent,
                 onOpenMarshal = onOpenMarshal,
@@ -163,6 +168,7 @@ private fun ProfileContent(
             ProfileMode.Edit -> ProfileEditContent(
                 state = state,
                 onIntent = onIntent,
+                isDemo = demoExpiresAt != null,
             )
             ProfileMode.ConfirmPhone -> ProfilePhoneConfirmContent(
                 state = state,
@@ -178,23 +184,29 @@ private fun ProfileViewContent(
     appConfig: AppConfig,
     clientName: String,
     phone: String,
+    demoExpiresAt: Instant?,
     onOpenExternalUrl: (String) -> Unit,
     onIntent: (ProfileIntent) -> Unit,
     onOpenMarshal: () -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
+    if (demoExpiresAt != null) {
+        DemoAccountBanner(expiresAt = demoExpiresAt)
+    }
     ProfileInfoRow(
         label = null,
         value = clientName.ifBlank { "Имя" },
         placeholder = clientName.isBlank(),
         onClick = { onIntent(ProfileIntent.EditClicked) },
     )
-    ProfileInfoRow(
-        label = "Телефон",
-        value = formatPhoneNumber(phone),
-        onClick = { onIntent(ProfileIntent.EditClicked) },
-    )
+    if (demoExpiresAt == null) {
+        ProfileInfoRow(
+            label = "Телефон",
+            value = formatPhoneNumber(phone),
+            onClick = { onIntent(ProfileIntent.EditClicked) },
+        )
+    }
     Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
     // Вход в рабочее место маршала (F6): доступ даёт токен, а не эта кнопка,
     // поэтому её видно всем — сам режим без токена ничего не покажет.
@@ -218,6 +230,7 @@ private fun ProfileViewContent(
 private fun ProfileEditContent(
     state: ProfileState,
     onIntent: (ProfileIntent) -> Unit,
+    isDemo: Boolean,
 ) {
     ProfileTextField(
         value = state.nameInput,
@@ -225,14 +238,17 @@ private fun ProfileEditContent(
         label = "Имя",
         enabled = !state.isSubmitting,
     )
-    ProfileTextField(
-        value = state.phoneInput,
-        onValueChange = { onIntent(ProfileIntent.PhoneChanged(it)) },
-        label = "Телефон",
-        enabled = !state.isSubmitting,
-        keyboardType = KeyboardType.Phone,
-        visualTransformation = PhoneNumberVisualTransformation(),
-    )
+    // Гостю номер не меняется: сервер это запрещает, и поле только обещало бы невозможное.
+    if (!isDemo) {
+        ProfileTextField(
+            value = state.phoneInput,
+            onValueChange = { onIntent(ProfileIntent.PhoneChanged(it)) },
+            label = "Телефон",
+            enabled = !state.isSubmitting,
+            keyboardType = KeyboardType.Phone,
+            visualTransformation = PhoneNumberVisualTransformation(),
+        )
+    }
     state.fieldError?.let {
         Text(it, color = MaterialTheme.colorScheme.error)
     }
@@ -335,6 +351,31 @@ private fun ProfileTextField(
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth().webLabel(label),
     )
+}
+
+/** Плашка гостевого аккаунта: чтобы гость понимал, что данные временные. */
+@Composable
+private fun DemoAccountBanner(expiresAt: Instant) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(VolnaTheme.tokens.radius.lg))
+            .padding(VolnaTheme.tokens.spacing.md),
+        verticalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xxs),
+    ) {
+        Text(
+            text = "Демо-режим",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = "Гостевой аккаунт действует до ${expiresAt.toBookingCardStartText()}. " +
+                "Потом он удалится вместе с записями.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable

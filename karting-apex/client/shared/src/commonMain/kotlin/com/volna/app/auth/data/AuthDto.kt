@@ -39,3 +39,24 @@ data class ClientDto(
     @SerialName("created_at")
     val createdAt: Instant,
 )
+
+@Serializable
+data class AuthMethodsDto(
+    val sms: Boolean = false,
+    val demo: Boolean = false,
+    val telegram: TelegramMethodDto? = null,
+)
+
+@Serializable
+data class TelegramMethodDto(
+    @SerialName("bot_username")
+    val botUsername: String,
+)
+
+@Serializable
+data class DemoLoginResponseDto(
+    val token: String,
+    val client: ClientDto,
+    @SerialName("demo_expires_at")
+    val demoExpiresAt: Instant,
+)

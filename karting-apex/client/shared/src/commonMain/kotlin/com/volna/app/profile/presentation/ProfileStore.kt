@@ -51,7 +51,9 @@ data class ProfileState(
     val isNameValid: Boolean = nameInput.trim().length in 1..100
     val isPhoneValid: Boolean = phoneInput.isRussianPhoneInputComplete()
     val isCodeValid: Boolean = codeInput.matches(Regex("^\\d{4,6}$"))
-    val canSave: Boolean = !isSubmitting && isNameValid && isPhoneValid
+    /** Гостю номер не показывается и не меняется — для сохранения достаточно имени. */
+    val isDemoProfile: Boolean = (profile as? Loadable.Content)?.value?.isDemo == true
+    val canSave: Boolean = !isSubmitting && isNameValid && (isPhoneValid || isDemoProfile)
     val canConfirmPhone: Boolean = !isSubmitting && isCodeValid
     val canResendCode: Boolean = !isSubmitting && resendSecondsRemaining == 0
 }
@@ -217,6 +219,10 @@ class ProfileStore(
         val phone = normalizePhoneE164(current.phoneInput)
         if (name.length !in 1..100) {
             mutableState.update { it.copy(fieldError = "Проверьте имя — кажется, тут лишние символы") }
+            return
+        }
+        if (currentClient.isDemo) {
+            if (!current.isSubmitting) updateName(name)
             return
         }
         if (!current.isPhoneValid) {

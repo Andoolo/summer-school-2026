@@ -15,4 +15,7 @@ data class Client(
     val name: String?,
     val phone: Phone,
     val createdAt: Instant,
+    /** Гостевой (демо) аккаунт: живёт до [demoExpiresAt], номер и удаление недоступны. */
+    val isDemo: Boolean = false,
+    val demoExpiresAt: Instant? = null,
 )

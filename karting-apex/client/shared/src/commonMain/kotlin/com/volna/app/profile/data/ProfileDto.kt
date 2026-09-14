@@ -11,6 +11,10 @@ data class ProfileClientDto(
     val phone: String,
     @SerialName("created_at")
     val createdAt: Instant,
+    @SerialName("is_demo")
+    val isDemo: Boolean = false,
+    @SerialName("demo_expires_at")
+    val demoExpiresAt: Instant? = null,
 )
 
 @Serializable

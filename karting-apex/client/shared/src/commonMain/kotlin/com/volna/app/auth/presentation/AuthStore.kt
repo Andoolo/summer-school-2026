@@ -2,6 +2,7 @@ package com.volna.app.auth.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.volna.app.auth.AuthMethods
 import com.volna.app.auth.AuthRepository
 import com.volna.app.core.error.ApiErrorCode
 import com.volna.app.core.error.AppFailure
@@ -12,6 +13,7 @@ import com.volna.app.core.phone.isRussianPhoneInputComplete
 import com.volna.app.core.phone.normalizePhoneE164
 import com.volna.app.core.phone.sanitizePhoneInput
 import com.volna.app.core.ui.ActionStatus
+import com.volna.app.core.ui.Loadable
 import com.volna.app.domain.model.Client
 import com.volna.app.domain.model.Phone
 import com.volna.app.profile.ProfileRepository
@@ -31,6 +33,7 @@ enum class AuthStep {
 }
 
 data class AuthState(
+    val methods: Loadable<AuthMethods> = Loadable.Initial,
     val step: AuthStep = AuthStep.Phone,
     val phoneInput: String = "",
     val codeInput: String = "",
@@ -54,6 +57,8 @@ data class AuthState(
 }
 
 sealed interface AuthIntent {
+    data object LoadMethods : AuthIntent
+    data object DemoLogin : AuthIntent
     data class PhoneChanged(val value: String) : AuthIntent
     data object RequestCode : AuthIntent
     data class CodeChanged(val value: String) : AuthIntent
@@ -84,6 +89,8 @@ class AuthStore(
 
     override fun accept(intent: AuthIntent) {
         when (intent) {
+            AuthIntent.LoadMethods -> loadMethods()
+            AuthIntent.DemoLogin -> demoLogin()
             is AuthIntent.PhoneChanged -> onPhoneChanged(intent.value)
             AuthIntent.RequestCode -> requestCode()
             is AuthIntent.CodeChanged -> onCodeChanged(intent.value)
@@ -98,6 +105,41 @@ class AuthStore(
     }
 
     override suspend fun effects(): AuthEffect = effects.receive()
+
+    private fun loadMethods() {
+        val current = mutableState.value.methods
+        if (current == Loadable.Loading || current is Loadable.Content) return
+        storeScope.launch {
+            mutableState.update { it.copy(methods = Loadable.Loading) }
+            authRepository.authMethods().fold(
+                onSuccess = { methods -> mutableState.update { it.copy(methods = Loadable.Content(methods)) } },
+                onFailure = { failure ->
+                    AppLogger.e(failure, "Failed to load auth methods")
+                    mutableState.update { it.copy(methods = Loadable.Error(failure.asAppFailure())) }
+                },
+            )
+        }
+    }
+
+    private fun demoLogin() {
+        if (mutableState.value.isSubmitting) return
+        storeScope.launch {
+            mutableState.update { it.copy(actionStatus = ActionStatus.Submitting, message = null) }
+            authRepository.demoLogin().fold(
+                onSuccess = {
+                    mutableState.update { it.copy(actionStatus = ActionStatus.Idle) }
+                    effects.send(AuthEffect.Authenticated)
+                },
+                onFailure = { failure ->
+                    AppLogger.e(failure, "Failed to start demo session")
+                    val appFailure = failure.asAppFailure()
+                    mutableState.update {
+                        it.copy(actionStatus = ActionStatus.Idle, message = demoLoginMessage(appFailure))
+                    }
+                },
+            )
+        }
+    }
 
     private fun onPhoneChanged(value: String) {
         mutableState.update {
@@ -294,7 +336,8 @@ class AuthStore(
 
     private fun reset() {
         resendTimer?.cancel()
-        mutableState.value = AuthState()
+        // Способы входа не зависят от сессии — после выхода их не нужно грузить заново.
+        mutableState.value = AuthState(methods = mutableState.value.methods)
     }
 
     private fun startResendTimer(seconds: Int) {
@@ -308,6 +351,13 @@ class AuthStore(
                 }
             }
         }
+    }
+
+    private fun demoLoginMessage(failure: AppFailure): String = when {
+        // 429 — лимит входов с адреса, 503 (тот же код) — переполнен сам демо-режим.
+        failure.isTooManyRequests() -> "Демо-вход сейчас недоступен. Попробуйте позже"
+        failure == AppFailure.NetworkUnavailable -> "Не удалось загрузить. Проверьте соединение и попробуйте снова"
+        else -> "Не удалось открыть демо. Попробуйте ещё раз"
     }
 
     private fun requestCodeMessage(failure: AppFailure): String = when {

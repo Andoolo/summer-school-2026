@@ -10,6 +10,8 @@ fun ProfileClientDto.toDomain(): Client = Client(
     name = name,
     phone = Phone(phone),
     createdAt = createdAt,
+    isDemo = isDemo,
+    demoExpiresAt = demoExpiresAt,
 )
 
 fun ProfileRequestCodeResponseDto.toDomain(): RequestCodeResult = RequestCodeResult(
