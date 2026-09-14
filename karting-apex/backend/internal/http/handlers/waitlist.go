@@ -49,6 +49,40 @@ type waitlistStatusDTO struct {
 	NotificationsEnabled bool              `json:"notifications_enabled"`
 }
 
+type myWaitlistEntryDTO struct {
+	waitlistEntryDTO
+	SlotID    string    `json:"slot_id"`
+	RouteName string    `json:"route_name"`
+	StartAt   time.Time `json:"start_at"`
+}
+
+type myWaitlistDTO struct {
+	Items []myWaitlistEntryDTO `json:"items"`
+}
+
+// Mine — GET /waitlist: очереди, в которых человек стоит (раздел «Мои очереди» в профиле).
+func (h *WaitlistHandler) Mine(w http.ResponseWriter, r *http.Request) {
+	token, ok := bearerOrUnauthorized(w, r)
+	if !ok {
+		return
+	}
+	entries, err := h.service.Mine(r.Context(), token)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	dto := myWaitlistDTO{Items: make([]myWaitlistEntryDTO, 0, len(entries))}
+	for _, entry := range entries {
+		dto.Items = append(dto.Items, myWaitlistEntryDTO{
+			waitlistEntryDTO: *entryDTO(entry.Entry),
+			SlotID:           entry.SlotID,
+			RouteName:        entry.RouteName,
+			StartAt:          entry.StartAt,
+		})
+	}
+	httpapi.WriteJSON(w, http.StatusOK, dto)
+}
+
 // Status — GET /slots/{slotID}/waitlist: стоит ли человек в очереди и может ли встать.
 func (h *WaitlistHandler) Status(w http.ResponseWriter, r *http.Request) {
 	token, slotID, ok := h.request(w, r)

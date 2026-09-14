@@ -27,6 +27,14 @@ data class WaitlistEntry(
     val offerExpiresAt: Instant?,
 )
 
+/** Очередь в списке «Мои очереди»: запись плюс заезд, к которому она относится. */
+data class MyWaitlistEntry(
+    val slotId: SlotId,
+    val routeName: String,
+    val startAt: Instant,
+    val entry: WaitlistEntry,
+)
+
 data class WaitlistStatus(
     val entry: WaitlistEntry?,
     val telegramLinked: Boolean,
@@ -37,6 +45,9 @@ interface WaitlistRepository {
     suspend fun status(slotId: SlotId): Result<WaitlistStatus>
     suspend fun join(slotId: SlotId, seatsCount: Int): Result<WaitlistEntry>
     suspend fun leave(slotId: SlotId): Result<Unit>
+
+    /** Очереди текущего человека на заезды, которые ещё не начались, по времени старта. */
+    suspend fun mine(): Result<List<MyWaitlistEntry>>
 }
 
 const val OfferMinutes = 15
@@ -49,4 +60,5 @@ object DisabledWaitlistRepository : WaitlistRepository {
     override suspend fun status(slotId: SlotId): Result<WaitlistStatus> = unavailable()
     override suspend fun join(slotId: SlotId, seatsCount: Int): Result<WaitlistEntry> = unavailable()
     override suspend fun leave(slotId: SlotId): Result<Unit> = unavailable()
+    override suspend fun mine(): Result<List<MyWaitlistEntry>> = unavailable()
 }

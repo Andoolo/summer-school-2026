@@ -8,9 +8,10 @@ import (
 )
 
 type fakeRepo struct {
-	client Client
-	found  bool
-	joins  int
+	client  Client
+	found   bool
+	joins   int
+	mineFor string
 }
 
 func (r *fakeRepo) ClientBySessionTokenHash(context.Context, string) (Client, bool, error) {
@@ -26,6 +27,11 @@ func (r *fakeRepo) Leave(context.Context, string, string, time.Time) error { ret
 
 func (r *fakeRepo) ActiveEntry(context.Context, string, string) (Entry, bool, error) {
 	return Entry{}, false, nil
+}
+
+func (r *fakeRepo) ActiveEntriesForClient(_ context.Context, clientID string, _ time.Time) ([]MyEntry, error) {
+	r.mineFor = clientID
+	return []MyEntry{{RouteName: "Городское кольцо"}}, nil
 }
 
 func TestJoinChecksRequestAndTelegram(t *testing.T) {
@@ -72,5 +78,21 @@ func TestOfferExpiresAt(t *testing.T) {
 	}
 	if (Entry{Status: "waiting"}).OfferExpiresAt() != nil {
 		t.Fatal("waiting entry has no offer")
+	}
+}
+
+func TestMineRequiresSessionAndUsesClientID(t *testing.T) {
+	ctx := context.Background()
+	if _, err := NewService(&fakeRepo{found: false}, nil).Mine(ctx, "t"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("Mine() without session error = %v", err)
+	}
+	if _, err := NewService(&fakeRepo{found: true}, nil).Mine(ctx, ""); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("Mine() without token error = %v", err)
+	}
+	// Не нужен Telegram: посмотреть и покинуть очереди можно, даже если уведомления выключены.
+	repo := &fakeRepo{found: true, client: Client{ID: "client-7"}}
+	entries, err := NewService(repo, nil).Mine(ctx, "t")
+	if err != nil || len(entries) != 1 || repo.mineFor != "client-7" {
+		t.Fatalf("Mine() = %v, %v; repo asked for %q", entries, err, repo.mineFor)
 	}
 }

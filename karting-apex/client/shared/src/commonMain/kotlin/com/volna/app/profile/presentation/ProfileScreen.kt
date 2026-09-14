@@ -48,6 +48,9 @@ fun ProfileScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
+    // Раздел «Мои очереди»: живёт в каталоге и приходит сюда готовым, чтобы профиль не
+    // зависел от листа ожидания.
+    waitlistSection: @Composable () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
@@ -105,6 +108,7 @@ fun ProfileScreen(
                     onOpenMarshal = onOpenMarshal,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
+                    waitlistSection = waitlistSection,
                 )
                 is Loadable.Error -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
                 is Loadable.Empty -> ProfileError(onRetry = { onIntent(ProfileIntent.Load) })
@@ -144,6 +148,7 @@ private fun ProfileContent(
     onOpenMarshal: () -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    waitlistSection: @Composable () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -164,6 +169,7 @@ private fun ProfileContent(
                 onOpenMarshal = onOpenMarshal,
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
+                waitlistSection = waitlistSection,
             )
             ProfileMode.Edit -> ProfileEditContent(
                 state = state,
@@ -190,6 +196,7 @@ private fun ProfileViewContent(
     onOpenMarshal: () -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    waitlistSection: @Composable () -> Unit,
 ) {
     if (demoExpiresAt != null) {
         DemoAccountBanner(expiresAt = demoExpiresAt)
@@ -207,6 +214,7 @@ private fun ProfileViewContent(
             onClick = { onIntent(ProfileIntent.EditClicked) },
         )
     }
+    waitlistSection()
     Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
     // Вход в рабочее место маршала (F6): доступ даёт токен, а не эта кнопка,
     // поэтому её видно всем — сам режим без токена ничего не покажет.

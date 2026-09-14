@@ -35,7 +35,7 @@ func TestWaitlistEndpoints(t *testing.T) {
 	joins := 0
 	handler := handlers.NewWaitlistHandler(waitlist.NewService(postgres.NewWaitlistRepository(db), func() { joins++ }), nil)
 	router := httpapi.NewRouter(nil, httpapi.RouterOptions{
-		WaitlistStatus: handler.Status, WaitlistJoin: handler.Join, WaitlistLeave: handler.Leave,
+		WaitlistStatus: handler.Status, WaitlistJoin: handler.Join, WaitlistLeave: handler.Leave, WaitlistMine: handler.Mine,
 	})
 	call := func(method, token, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/slots/"+slotID+"/waitlist", strings.NewReader(body))
@@ -95,6 +95,33 @@ func TestWaitlistEndpoints(t *testing.T) {
 	if status.Entry == nil || status.Entry.Status != "waiting" || status.Entry.Position != 1 || status.Entry.SeatsCount != 2 || !status.TelegramLinked || !status.NotificationsEnabled {
 		t.Fatalf("status = %s", recorder.Body.String())
 	}
+
+	// «Мои очереди»: запись видна со слотом, трассой и временем старта.
+	mineReq := httptest.NewRequest(http.MethodGet, "/waitlist", nil)
+	mineReq.Header.Set("Authorization", "Bearer waitlist-token")
+	mine := httptest.NewRecorder()
+	router.ServeHTTP(mine, mineReq)
+	expectCode(mine, http.StatusOK, "")
+	var mineBody struct {
+		Items []struct {
+			SlotID     string `json:"slot_id"`
+			RouteName  string `json:"route_name"`
+			StartAt    string `json:"start_at"`
+			Status     string `json:"status"`
+			Position   int    `json:"position"`
+			SeatsCount int    `json:"seats_count"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(mine.Body.Bytes(), &mineBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(mineBody.Items) != 1 || mineBody.Items[0].SlotID != slotID || mineBody.Items[0].RouteName == "" ||
+		mineBody.Items[0].StartAt == "" || mineBody.Items[0].Position != 1 || mineBody.Items[0].SeatsCount != 2 {
+		t.Fatalf("GET /waitlist = %s", mine.Body.String())
+	}
+	unauthorized := httptest.NewRecorder()
+	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/waitlist", nil))
+	expectCode(unauthorized, http.StatusUnauthorized, "unauthorized")
 
 	expectCode(call(http.MethodDelete, "waitlist-token", ""), http.StatusNoContent, "")
 	recorder = call(http.MethodGet, "waitlist-token", "")

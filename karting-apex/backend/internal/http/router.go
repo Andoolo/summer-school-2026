@@ -52,6 +52,8 @@ type RouterOptions struct {
 	WaitlistStatus http.HandlerFunc
 	WaitlistJoin   http.HandlerFunc
 	WaitlistLeave  http.HandlerFunc
+	// WaitlistMine — GET /waitlist: очереди текущего клиента.
+	WaitlistMine http.HandlerFunc
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
@@ -145,6 +147,9 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 		router.Get("/slots/{slotID}/waitlist", opts.WaitlistStatus)
 		router.Post("/slots/{slotID}/waitlist", opts.WaitlistJoin)
 		router.Delete("/slots/{slotID}/waitlist", opts.WaitlistLeave)
+	}
+	if opts.WaitlistMine != nil {
+		router.Get("/waitlist", opts.WaitlistMine)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})

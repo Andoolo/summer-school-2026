@@ -16,6 +16,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -40,6 +41,9 @@ import com.volna.app.booking.presentation.BookingFormState
 import com.volna.app.booking.presentation.BookingListIntent
 import com.volna.app.booking.presentation.BookingListScreen
 import com.volna.app.booking.presentation.BookingListState
+import com.volna.app.catalog.presentation.MyWaitlistIntent
+import com.volna.app.catalog.presentation.MyWaitlistSection
+import com.volna.app.catalog.presentation.MyWaitlistStore
 import com.volna.app.catalog.presentation.SlotDetailsIntent
 import com.volna.app.catalog.presentation.SlotDetailsScreen
 import com.volna.app.catalog.presentation.SlotDetailsState
@@ -70,6 +74,7 @@ import com.volna.app.auth.presentation.AuthIntent
 import com.volna.app.auth.presentation.AuthScreen
 import com.volna.app.auth.presentation.AuthState
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 internal fun MainTabs(
@@ -238,6 +243,11 @@ internal fun MainTabs(
                 composable<ProfileDestination> {
                     val themeController = koinInject<ThemeController>()
                     val themeMode by themeController.mode.collectAsState()
+                    // Стор живёт вместе с экраном профиля: при каждом входе список свежий, после
+                    // выхода из аккаунта чужие очереди не остаются в памяти.
+                    val myWaitlistStore = koinViewModel<MyWaitlistStore>()
+                    val myWaitlistState by myWaitlistStore.state.collectAsState()
+                    LaunchedEffect(myWaitlistStore) { myWaitlistStore.accept(MyWaitlistIntent.Load) }
                     ProfileScreen(
                         state = profileState,
                         appConfig = appConfig,
@@ -245,6 +255,13 @@ internal fun MainTabs(
                         onOpenMarshal = { navController.navigate(MarshalDestination) },
                         themeMode = themeMode,
                         onThemeModeChange = themeController::select,
+                        waitlistSection = {
+                            MyWaitlistSection(
+                                state = myWaitlistState,
+                                onIntent = myWaitlistStore::accept,
+                                onOpenSlot = { slotId -> navController.navigate(SlotDetailsDestination(slotId.value)) },
+                            )
+                        },
                     )
                 }
             }

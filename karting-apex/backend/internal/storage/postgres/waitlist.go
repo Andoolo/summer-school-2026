@@ -134,12 +134,9 @@ func (r *WaitlistRepository) ActiveEntry(ctx context.Context, clientID, slotID s
 	return activeEntry(ctx, r.db, clientID, slotID)
 }
 
-// activeEntry — запись клиента в очереди заезда с местом в очереди. Место считается
-// только среди ждущих: у получивших предложение очередь уже подошла.
-func activeEntry(ctx context.Context, db bookingQuerier, clientID, slotID string) (waitlist.Entry, bool, error) {
-	var entry waitlist.Entry
-	err := db.QueryRow(ctx, `
-SELECT
+// entryColumnsSQL — поля записи в очереди и место в очереди. Место считается только среди
+// ждущих: у получивших предложение очередь уже подошла.
+const entryColumnsSQL = `
     w.id::text,
     w.slot_id::text,
     w.seats_count,
@@ -152,10 +149,20 @@ SELECT
         WHERE ahead.slot_id = w.slot_id
           AND ahead.status = 'waiting'
           AND (ahead.created_at, ahead.id) < (w.created_at, w.id)
-    ) ELSE 0 END
+    ) ELSE 0 END`
+
+func entryScanDest(entry *waitlist.Entry) []any {
+	return []any{&entry.ID, &entry.SlotID, &entry.SeatsCount, &entry.Status, &entry.CreatedAt, &entry.NotifiedAt, &entry.Position}
+}
+
+// activeEntry — запись клиента в очереди заезда.
+func activeEntry(ctx context.Context, db bookingQuerier, clientID, slotID string) (waitlist.Entry, bool, error) {
+	var entry waitlist.Entry
+	err := db.QueryRow(ctx, `
+SELECT `+entryColumnsSQL+`
 FROM waitlist_entries w
 WHERE w.client_id = $1 AND w.slot_id = $2 AND w.status IN ('waiting', 'notified')`, clientID, slotID).
-		Scan(&entry.ID, &entry.SlotID, &entry.SeatsCount, &entry.Status, &entry.CreatedAt, &entry.NotifiedAt, &entry.Position)
+		Scan(entryScanDest(&entry)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return waitlist.Entry{}, false, nil
 	}
@@ -163,6 +170,36 @@ WHERE w.client_id = $1 AND w.slot_id = $2 AND w.status IN ('waiting', 'notified'
 		return waitlist.Entry{}, false, fmt.Errorf("query waitlist entry: %w", err)
 	}
 	return entry, true, nil
+}
+
+func (r *WaitlistRepository) ActiveEntriesForClient(ctx context.Context, clientID string, now time.Time) ([]waitlist.MyEntry, error) {
+	rows, err := r.db.Query(ctx, `
+SELECT `+entryColumnsSQL+`, r.name, s.start_at
+FROM waitlist_entries w
+JOIN slots s ON s.id = w.slot_id
+JOIN routes r ON r.id = s.route_id
+WHERE w.client_id = $1
+  AND w.status IN ('waiting', 'notified')
+  AND s.start_at > $2
+  AND s.status <> 'cancelled'
+ORDER BY s.start_at, w.created_at`, clientID, now)
+	if err != nil {
+		return nil, fmt.Errorf("query client waitlist entries: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]waitlist.MyEntry, 0)
+	for rows.Next() {
+		var entry waitlist.MyEntry
+		if err := rows.Scan(append(entryScanDest(&entry.Entry), &entry.RouteName, &entry.StartAt)...); err != nil {
+			return nil, fmt.Errorf("scan client waitlist entry: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate client waitlist entries: %w", err)
+	}
+	return entries, nil
 }
 
 // ClaimOffers закрывает отработавшие записи и раздаёт свободные места следующим в

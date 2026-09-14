@@ -115,7 +115,7 @@ func main() {
 	telegramUsername := func() string { return "" }
 	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
 	onBookingChange := func() {}
-	var waitlistStatus, waitlistJoin, waitlistLeave http.HandlerFunc
+	var waitlistStatus, waitlistJoin, waitlistLeave, waitlistMine http.HandlerFunc
 	if botClient != nil {
 		webhookSecret := telegram.WebhookSecret(cfg.TelegramBotToken)
 		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger).WithAdminChat(cfg.AdminTelegramChatID)
@@ -143,7 +143,7 @@ func main() {
 		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
 		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
 		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo, dispatcher.Wake), logger)
-		waitlistStatus, waitlistJoin, waitlistLeave = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave
+		waitlistStatus, waitlistJoin, waitlistLeave, waitlistMine = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave, waitlistHandler.Mine
 		logger.Info("booking notifications and waitlist enabled")
 	}
 	authMethods := handlers.AuthMethodsHandler(handlers.AuthMethods{SMS: cfg.Dev, Demo: cfg.DemoLogin, TelegramBotUsername: telegramUsername})
@@ -193,6 +193,7 @@ func main() {
 			WaitlistStatus:    waitlistStatus,
 			WaitlistJoin:      waitlistJoin,
 			WaitlistLeave:     waitlistLeave,
+			WaitlistMine:      waitlistMine,
 			Dev:               cfg.Dev,
 			AllowedOrigin:     cfg.AllowedOrigin,
 			RateLimit:         rateLimit,

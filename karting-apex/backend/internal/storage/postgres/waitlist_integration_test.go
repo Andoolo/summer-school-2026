@@ -332,3 +332,45 @@ func TestWaitlistOfferSkipsEntryLeftDuringClaim(t *testing.T) {
 		t.Fatalf("entry status = %q, want left", status)
 	}
 }
+
+func TestWaitlistActiveEntriesForClient(t *testing.T) {
+	db, repo, now := prepareWaitlistDB(t)
+	ctx := context.Background()
+	anna := insertNotifyClient(t, db, "+79990020001", 701, true)
+	boris := insertNotifyClient(t, db, "+79990020002", 702, true)
+	route, instructor := slotRefs(t, db, laterSlot)
+
+	later := insertFullSlot(t, db, route, instructor, now.Add(30*time.Hour))
+	soon := insertFullSlot(t, db, route, instructor, now.Add(6*time.Hour))
+	gone := insertFullSlot(t, db, route, instructor, now.Add(7*time.Hour))
+	started := insertFullSlot(t, db, route, instructor, now.Add(8*time.Hour))
+	// Борис стоит в очереди на «ранний» заезд первым — Анна там вторая.
+	if _, _, err := repo.Join(ctx, boris, soon, 1, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	for _, slot := range []string{later, soon, gone, started} {
+		if _, _, err := repo.Join(ctx, anna, slot, 2, now); err != nil {
+			t.Fatalf("join %s: %v", slot, err)
+		}
+	}
+	if err := repo.Leave(ctx, anna, gone, now); err != nil {
+		t.Fatal(err)
+	}
+	exec(t, db, `UPDATE slots SET start_at = $1 WHERE id = $2`, now.Add(-time.Minute), started)
+
+	entries, err := repo.ActiveEntriesForClient(ctx, anna, now)
+	if err != nil {
+		t.Fatalf("ActiveEntriesForClient() error = %v", err)
+	}
+	// Вышедшие и начавшиеся не показываются; порядок — по времени старта.
+	if len(entries) != 2 || entries[0].SlotID != soon || entries[1].SlotID != later {
+		t.Fatalf("entries = %+v, want soon then later", entries)
+	}
+	first := entries[0]
+	if first.Position != 2 || first.SeatsCount != 2 || first.Status != "waiting" || first.RouteName == "" || !first.StartAt.Equal(now.Add(6*time.Hour)) {
+		t.Fatalf("first entry = %+v", first)
+	}
+	if others, _ := repo.ActiveEntriesForClient(ctx, boris, now); len(others) != 1 || others[0].Position != 1 {
+		t.Fatalf("boris entries = %+v", others)
+	}
+}

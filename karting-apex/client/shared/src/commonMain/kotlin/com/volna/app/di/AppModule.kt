@@ -18,6 +18,7 @@ import com.volna.app.catalog.data.KtorInstructorRepository
 import com.volna.app.catalog.data.KtorSlotRepository
 import com.volna.app.catalog.WaitlistRepository
 import com.volna.app.catalog.data.KtorWaitlistRepository
+import com.volna.app.catalog.presentation.MyWaitlistStore
 import com.volna.app.catalog.presentation.SlotDetailsStore
 import com.volna.app.catalog.presentation.TrackStore
 import com.volna.app.core.storage.MarshalTokenStorage
@@ -79,6 +80,7 @@ val volnaAppModule = module {
     viewModel { ProfileStore(get(), get()) }
     viewModel { SlotListStore(get(), get()) }
     viewModel { SlotDetailsStore(get(), waitlistRepository = get()) }
+    viewModel { MyWaitlistStore(get()) }
     viewModel { TrackStore(get()) }
     viewModel { MarshalStore(get(), get(), get(), get()) }
     viewModel { BookingFormStore(get(), get()) }

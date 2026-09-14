@@ -63,6 +63,13 @@ func (e Entry) OfferExpiresAt() *time.Time {
 	return &expires
 }
 
+// MyEntry — запись в очереди для списка «Мои очереди» в профиле.
+type MyEntry struct {
+	Entry
+	RouteName string
+	StartAt   time.Time
+}
+
 type Status struct {
 	Entry                *Entry
 	TelegramLinked       bool
@@ -77,6 +84,9 @@ type Repository interface {
 	Join(ctx context.Context, clientID, slotID string, seats int, now time.Time) (entry Entry, created bool, err error)
 	Leave(ctx context.Context, clientID, slotID string, now time.Time) error
 	ActiveEntry(ctx context.Context, clientID, slotID string) (Entry, bool, error)
+	// ActiveEntriesForClient — очереди клиента на заезды, которые ещё не начались, по
+	// времени старта.
+	ActiveEntriesForClient(ctx context.Context, clientID string, now time.Time) ([]MyEntry, error)
 }
 
 type Service struct {
@@ -111,6 +121,15 @@ func (s *Service) Status(ctx context.Context, token, slotID string) (Status, err
 		status.Entry = &entry
 	}
 	return status, nil
+}
+
+// Mine — все очереди человека, в которых он сейчас стоит.
+func (s *Service) Mine(ctx context.Context, token string) ([]MyEntry, error) {
+	client, err := s.client(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.ActiveEntriesForClient(ctx, client.ID, s.now().UTC())
 }
 
 func (s *Service) Join(ctx context.Context, token, slotID string, seats int) (Entry, bool, error) {

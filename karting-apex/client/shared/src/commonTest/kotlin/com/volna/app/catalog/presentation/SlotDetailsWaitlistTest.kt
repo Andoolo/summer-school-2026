@@ -162,5 +162,7 @@ class SlotDetailsWaitlistTest {
             leaves++
             return Result.success(Unit)
         }
+
+        override suspend fun mine(): Result<List<com.volna.app.catalog.MyWaitlistEntry>> = Result.success(emptyList())
     }
 }
