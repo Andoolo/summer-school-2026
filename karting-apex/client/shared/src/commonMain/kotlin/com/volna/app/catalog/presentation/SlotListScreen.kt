@@ -426,12 +426,13 @@ private fun SlotCard(
     slot: Slot,
     onSlotClick: (Slot) -> Unit,
 ) {
-    val canOpen = slot.freeSeats > 0
+    val hasSeats = slot.freeSeats > 0
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .height(VolnaTheme.tokens.sizing.listCardHeight)
-            .clickable(enabled = canOpen, role = Role.Button) { onSlotClick(slot) }
+            // Заполненный заезд тоже открывается: на его экране — лист ожидания.
+            .clickable(role = Role.Button) { onSlotClick(slot) }
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(VolnaTheme.tokens.spacing.xl),
@@ -492,7 +493,7 @@ private fun SlotCard(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
             Text(
-                text = if (canOpen) "Свободно мест" else "Мест нет",
+                text = if (hasSeats) "Свободно мест" else "Мест нет · есть лист ожидания",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

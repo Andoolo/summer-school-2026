@@ -19,6 +19,10 @@ enum class ApiErrorCode {
     IdempotencyConflict,
     PhoneConflict,
     TooManyRequests,
+    TelegramRequired,
+    NotificationsDisabled,
+    SeatsAvailable,
+    WaitlistLimit,
     InternalError,
     Unknown,
 }

@@ -62,6 +62,8 @@ fun SlotDetailsScreen(
             is Loadable.Content -> SlotDetailsContent(
                 slot = slot.value,
                 leaderboard = state.leaderboard,
+                waitlist = state.waitlist,
+                onIntent = onIntent,
                 onBack = onBack,
                 onBook = { onBook(slot.value) },
                 onOpenMap = { onIntent(SlotDetailsIntent.OpenRouteMap) },
@@ -96,6 +98,8 @@ fun SlotDetailsScreen(
 private fun SlotDetailsContent(
     slot: Slot,
     leaderboard: List<com.volna.app.domain.model.LeaderboardEntry>,
+    waitlist: WaitlistUiState,
+    onIntent: (SlotDetailsIntent) -> Unit,
     onBack: () -> Unit,
     onBook: () -> Unit,
     onOpenMap: () -> Unit,
@@ -132,6 +136,8 @@ private fun SlotDetailsContent(
             slot = slot,
             availability = availability,
             leaderboard = leaderboard,
+            waitlist = waitlist,
+            onIntent = onIntent,
             onBook = onBook,
             onOpenMap = onOpenMap,
             onOpenTrack = onOpenTrack,
@@ -173,6 +179,8 @@ private fun SlotDetailsSheetContent(
     slot: Slot,
     availability: com.volna.app.domain.policy.Availability,
     leaderboard: List<com.volna.app.domain.model.LeaderboardEntry>,
+    waitlist: WaitlistUiState,
+    onIntent: (SlotDetailsIntent) -> Unit,
     onBook: () -> Unit,
     onOpenMap: () -> Unit,
     onOpenTrack: () -> Unit,
@@ -259,6 +267,16 @@ private fun SlotDetailsSheetContent(
         if (leaderboard.isNotEmpty()) {
             item {
                 LeaderboardCard(entries = leaderboard)
+            }
+        }
+        if (slot.status == com.volna.app.domain.model.SlotStatus.Scheduled) {
+            item {
+                SlotWaitlistCard(
+                    waitlist = waitlist,
+                    canBook = availability.canBook,
+                    maxSeats = minOf(slot.route.capacityCap, 3),
+                    onIntent = onIntent,
+                )
             }
         }
         item {

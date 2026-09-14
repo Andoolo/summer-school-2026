@@ -46,6 +46,10 @@ private fun String.toApiErrorCode(): ApiErrorCode = when (this) {
     "idempotency_conflict" -> ApiErrorCode.IdempotencyConflict
     "phone_conflict" -> ApiErrorCode.PhoneConflict
     "too_many_requests" -> ApiErrorCode.TooManyRequests
+    "telegram_required" -> ApiErrorCode.TelegramRequired
+    "notifications_disabled" -> ApiErrorCode.NotificationsDisabled
+    "seats_available" -> ApiErrorCode.SeatsAvailable
+    "waitlist_limit" -> ApiErrorCode.WaitlistLimit
     "internal_error" -> ApiErrorCode.InternalError
     else -> ApiErrorCode.Unknown
 }

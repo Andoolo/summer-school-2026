@@ -169,6 +169,12 @@ WHERE client_id = $1 AND status = 'active'`, clientID, now); err != nil {
 		return fmt.Errorf("cancel client bookings: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
+UPDATE waitlist_entries
+SET status = 'left', closed_at = $2
+WHERE client_id = $1 AND status IN ('waiting', 'notified')`, clientID, now); err != nil {
+		return fmt.Errorf("leave client waitlists: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
 UPDATE clients
 SET name = NULL,
     phone = '+1' || lpad(abs(hashtext(id::text))::text, 13, '0'),

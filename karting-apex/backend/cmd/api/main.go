@@ -18,6 +18,7 @@ import (
 	"summer-school-2026/backend/internal/service/notify"
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/service/telegramlogin"
+	"summer-school-2026/backend/internal/service/waitlist"
 	"summer-school-2026/backend/internal/storage/postgres"
 	"summer-school-2026/backend/internal/telegram"
 	"summer-school-2026/backend/migrations"
@@ -77,6 +78,7 @@ func main() {
 	telegramUsername := func() string { return "" }
 	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
 	onBookingChange := func() {}
+	var waitlistStatus, waitlistJoin, waitlistLeave http.HandlerFunc
 	if cfg.TelegramBotToken != "" {
 		botClient := telegram.NewClient(cfg.TelegramBotToken)
 		if cfg.TelegramAPIBase != "" {
@@ -97,10 +99,15 @@ func main() {
 
 		// Уведомления о бронях идут через того же бота. Слать можно и до подключения
 		// вебхука: отправка сообщений от него не зависит.
-		dispatcher := notify.NewDispatcher(postgres.NewNotificationRepository(db), botClient, logger)
+		// Лист ожидания — там же: предложения мест рассылает тот же рассыльщик.
+		waitlistRepo := postgres.NewWaitlistRepository(db)
+		dispatcher := notify.NewDispatcher(postgres.NewNotificationRepository(db), botClient, logger).
+			WithWaitlist(waitlistRepo, waitlist.OfferTTL, cfg.AllowedOrigin)
 		go dispatcher.Run(ctx)
 		onBookingChange = dispatcher.Wake
-		logger.Info("booking notifications enabled")
+		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo), logger, dispatcher.Wake)
+		waitlistStatus, waitlistJoin, waitlistLeave = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave
+		logger.Info("booking notifications and waitlist enabled")
 	}
 	authMethods := handlers.AuthMethodsHandler(handlers.AuthMethods{SMS: cfg.Dev, Demo: cfg.DemoLogin, TelegramBotUsername: telegramUsername})
 	profileRepo := postgres.NewProfileRepository(db)
@@ -146,6 +153,9 @@ func main() {
 			RoutePassport:     slotHandler.TrackPassport,
 			MarshalLapResults: marshalLapResults,
 			MarshalRaceRoster: marshalRaceRoster,
+			WaitlistStatus:    waitlistStatus,
+			WaitlistJoin:      waitlistJoin,
+			WaitlistLeave:     waitlistLeave,
 			Dev:               cfg.Dev,
 			AllowedOrigin:     cfg.AllowedOrigin,
 			RateLimit:         rateLimit,

@@ -75,6 +75,10 @@ type Dispatcher struct {
 	now      func() time.Time
 	interval time.Duration
 	wake     chan struct{}
+
+	waitlist WaitlistRepository
+	offerTTL time.Duration
+	appURL   string
 }
 
 func NewDispatcher(repo Repository, bot Bot, logger *slog.Logger) *Dispatcher {
@@ -134,7 +138,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 			}
 		}
 	}
-	return sent
+	return sent + d.runWaitlist(ctx)
 }
 
 // deliver возвращает (отправлено, нужно повторить позже).

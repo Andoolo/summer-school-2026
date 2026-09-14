@@ -47,6 +47,11 @@ type RouterOptions struct {
 	// MarshalRaceRoster — ручной маршрут GET /slots/{slotID}/participants
 	// (список участников заезда для маршала). Включается тем же MARSHAL_TOKEN.
 	MarshalRaceRoster http.HandlerFunc
+	// Лист ожидания: GET/POST/DELETE /slots/{slotID}/waitlist. nil — выключен (без бота
+	// уведомить о месте нечем).
+	WaitlistStatus http.HandlerFunc
+	WaitlistJoin   http.HandlerFunc
+	WaitlistLeave  http.HandlerFunc
 	// Dev включает dev-удобства (например, разрешающий CORS для локального веб-клиента).
 	// В production должен быть false (берётся из APP_ENV).
 	Dev bool
@@ -129,6 +134,11 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.MarshalRaceRoster != nil {
 		router.Get("/slots/{slotID}/participants", opts.MarshalRaceRoster)
+	}
+	if opts.WaitlistStatus != nil && opts.WaitlistJoin != nil && opts.WaitlistLeave != nil {
+		router.Get("/slots/{slotID}/waitlist", opts.WaitlistStatus)
+		router.Post("/slots/{slotID}/waitlist", opts.WaitlistJoin)
+		router.Delete("/slots/{slotID}/waitlist", opts.WaitlistLeave)
 	}
 	if opts.Profile != nil {
 		profileapi.HandlerWithOptions(opts.Profile, profileapi.ChiServerOptions{BaseRouter: router, ErrorHandlerFunc: OpenAPIErrorHandler})
