@@ -18,6 +18,7 @@ import com.volna.app.domain.model.RouteType
 import com.volna.app.domain.model.Slot
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
@@ -71,6 +72,7 @@ class SlotListStore(
     private val slotRepository: SlotRepository,
     private val instructorRepository: InstructorRepository,
     scope: CoroutineScope? = null,
+    private val now: () -> Instant = { Clock.System.now() },
 ) : ViewModel(), MviStore<SlotListState, SlotListIntent, SlotListEffect> {
     private val mutableState = MutableStateFlow(SlotListState())
     private val effects = Channel<SlotListEffect>(Channel.BUFFERED)
@@ -107,7 +109,12 @@ class SlotListStore(
         storeScope.launch {
             val filters = mutableState.value.filters
             mutableState.update { it.copy(slots = Loadable.Loading) }
-            slotRepository.listSlots(filters, PageRequest()).fold(
+            // Каталог — для записи, поэтому только заезды, которые ещё не начались. API
+            // отдаёт и прошедшие (по ним маршал вносит результаты), и без этой границы они
+            // стояли в каталоге первыми и выглядели доступными для записи.
+            val currentTime = now()
+            val request = filters.copy(dateFrom = maxOf(filters.dateFrom ?: currentTime, currentTime))
+            slotRepository.listSlots(request, PageRequest()).fold(
                 onSuccess = { page ->
                     mutableState.update {
                         it.copy(

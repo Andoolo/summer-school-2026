@@ -90,8 +90,12 @@ private fun PhoneStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Отступ сверху: без него логотип упирался в край экрана (на телефоне — в
+            // строку состояния), а вся форма прилипала к верху.
             .padding(
-                horizontal = VolnaTheme.tokens.spacing.md,
+                start = VolnaTheme.tokens.spacing.md,
+                end = VolnaTheme.tokens.spacing.md,
+                top = VolnaTheme.tokens.spacing.xl * 2,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
