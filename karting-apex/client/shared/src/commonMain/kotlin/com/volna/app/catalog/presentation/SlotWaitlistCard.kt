@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -100,6 +101,11 @@ private fun JoinContent(
             FilterChip(
                 selected = count == seats,
                 modifier = Modifier.webSelectionLabel(seatsText(count), count == seats),
+                // Выбор в цвете темы: по умолчанию Material красит его в сиреневый.
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 onClick = { onIntent(SlotDetailsIntent.SelectWaitlistSeats(count)) },
                 label = { Text(count.toString()) },
             )
