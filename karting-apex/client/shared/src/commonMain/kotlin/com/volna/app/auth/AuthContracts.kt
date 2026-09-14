@@ -3,6 +3,7 @@ package com.volna.app.auth
 import com.volna.app.core.error.AppFailure
 import com.volna.app.domain.model.Client
 import com.volna.app.domain.model.Phone
+import kotlinx.datetime.Instant
 
 data class RequestCodeResult(
     val ttlSeconds: Int,
@@ -25,12 +26,30 @@ data class AuthMethods(
     val telegramBotUsername: String?,
 )
 
+/** Начатый вход через Telegram. */
+data class TelegramLoginStart(
+    /** Секрет опроса: только по нему сервер выдаёт сессию. */
+    val pollToken: String,
+    val deepLink: String,
+    /** Код сверки: бот показывает тот же код. */
+    val confirmCode: String,
+    val expiresAt: Instant,
+)
+
+sealed interface TelegramPollResult {
+    data object Pending : TelegramPollResult
+    data object Expired : TelegramPollResult
+    data class Confirmed(val result: VerifyCodeResult) : TelegramPollResult
+}
+
 interface AuthRepository {
     suspend fun authMethods(): Result<AuthMethods>
     suspend fun requestCode(phone: Phone): Result<RequestCodeResult>
     suspend fun verifyCode(phone: Phone, code: String): Result<VerifyCodeResult>
     /** Гостевой вход: новый временный аккаунт без регистрации. */
     suspend fun demoLogin(): Result<VerifyCodeResult>
+    suspend fun telegramStart(): Result<TelegramLoginStart>
+    suspend fun telegramPoll(pollToken: String): Result<TelegramPollResult>
     suspend fun logout(): Result<Unit>
 }
 

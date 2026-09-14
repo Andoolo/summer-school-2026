@@ -60,3 +60,30 @@ data class DemoLoginResponseDto(
     @SerialName("demo_expires_at")
     val demoExpiresAt: Instant,
 )
+
+@Serializable
+data class TelegramStartResponseDto(
+    @SerialName("poll_token")
+    val pollToken: String,
+    @SerialName("deep_link")
+    val deepLink: String,
+    @SerialName("confirm_code")
+    val confirmCode: String,
+    @SerialName("expires_at")
+    val expiresAt: Instant,
+)
+
+@Serializable
+data class TelegramPollRequestDto(
+    @SerialName("poll_token")
+    val pollToken: String,
+)
+
+@Serializable
+data class TelegramPollResponseDto(
+    val status: String,
+    val token: String? = null,
+    val client: ClientDto? = null,
+    @SerialName("is_new")
+    val isNew: Boolean = false,
+)

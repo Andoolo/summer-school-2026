@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.volna.app.auth.AuthMethods
 import com.volna.app.auth.AuthRepository
+import com.volna.app.auth.TelegramPollResult
 import com.volna.app.core.error.ApiErrorCode
 import com.volna.app.core.error.AppFailure
 import com.volna.app.core.error.asAppFailure
@@ -32,8 +33,15 @@ enum class AuthStep {
     Name,
 }
 
+/** Идёт вход через Telegram: приложение ждёт подтверждения в боте. */
+data class TelegramLoginState(
+    val deepLink: String,
+    val confirmCode: String,
+)
+
 data class AuthState(
     val methods: Loadable<AuthMethods> = Loadable.Initial,
+    val telegram: TelegramLoginState? = null,
     val step: AuthStep = AuthStep.Phone,
     val phoneInput: String = "",
     val codeInput: String = "",
@@ -59,6 +67,8 @@ data class AuthState(
 sealed interface AuthIntent {
     data object LoadMethods : AuthIntent
     data object DemoLogin : AuthIntent
+    data object TelegramLogin : AuthIntent
+    data object TelegramCancel : AuthIntent
     data class PhoneChanged(val value: String) : AuthIntent
     data object RequestCode : AuthIntent
     data class CodeChanged(val value: String) : AuthIntent
@@ -84,6 +94,7 @@ class AuthStore(
     private val effects = Channel<AuthEffect>(Channel.BUFFERED)
     private val storeScope = scope ?: viewModelScope
     private var resendTimer: Job? = null
+    private var telegramPolling: Job? = null
 
     override val state: StateFlow<AuthState> = mutableState
 
@@ -91,6 +102,8 @@ class AuthStore(
         when (intent) {
             AuthIntent.LoadMethods -> loadMethods()
             AuthIntent.DemoLogin -> demoLogin()
+            AuthIntent.TelegramLogin -> telegramLogin()
+            AuthIntent.TelegramCancel -> cancelTelegram(message = null)
             is AuthIntent.PhoneChanged -> onPhoneChanged(intent.value)
             AuthIntent.RequestCode -> requestCode()
             is AuthIntent.CodeChanged -> onCodeChanged(intent.value)
@@ -139,6 +152,78 @@ class AuthStore(
                 },
             )
         }
+    }
+
+    private fun telegramLogin() {
+        if (mutableState.value.isSubmitting || telegramPolling?.isActive == true) return
+        storeScope.launch {
+            mutableState.update { it.copy(actionStatus = ActionStatus.Submitting, message = null) }
+            authRepository.telegramStart().fold(
+                onSuccess = { start ->
+                    // Открываем только ссылку на Telegram: даже если ответ сервера подменят,
+                    // приложение не отправит человека на чужой сайт.
+                    if (!start.deepLink.startsWith(TELEGRAM_LINK_PREFIX)) {
+                        AppLogger.e(IllegalStateException("Unexpected deep link host"), "Rejected telegram deep link")
+                        mutableState.update { it.copy(actionStatus = ActionStatus.Idle, message = TELEGRAM_FAILED_MESSAGE) }
+                        return@fold
+                    }
+                    mutableState.update {
+                        it.copy(
+                            actionStatus = ActionStatus.Idle,
+                            telegram = TelegramLoginState(deepLink = start.deepLink, confirmCode = start.confirmCode),
+                        )
+                    }
+                    pollTelegram(start.pollToken)
+                },
+                onFailure = { failure ->
+                    AppLogger.e(failure, "Failed to start telegram login")
+                    mutableState.update { it.copy(actionStatus = ActionStatus.Idle, message = TELEGRAM_FAILED_MESSAGE) }
+                },
+            )
+        }
+    }
+
+    private fun pollTelegram(pollToken: String) {
+        telegramPolling?.cancel()
+        telegramPolling = storeScope.launch {
+            // Запрос живёт 10 минут; с запасом на сетевые сбои опрашиваем не дольше 11.
+            repeat(TELEGRAM_MAX_POLLS) {
+                delay(TELEGRAM_POLL_INTERVAL_MS)
+                val result = authRepository.telegramPoll(pollToken)
+                val poll = result.getOrNull()
+                when {
+                    // Сетевой сбой — не повод прерывать вход: пробуем снова.
+                    poll == null -> AppLogger.e(result.exceptionOrNull() ?: IllegalStateException(), "Telegram poll failed")
+                    poll is TelegramPollResult.Pending -> Unit
+                    poll is TelegramPollResult.Expired -> {
+                        cancelTelegram(message = "Время на вход вышло. Попробуйте ещё раз")
+                        return@launch
+                    }
+                    poll is TelegramPollResult.Confirmed -> {
+                        onTelegramConfirmed(poll.result)
+                        return@launch
+                    }
+                }
+            }
+            cancelTelegram(message = "Время на вход вышло. Попробуйте ещё раз")
+        }
+    }
+
+    private suspend fun onTelegramConfirmed(result: com.volna.app.auth.VerifyCodeResult) {
+        mutableState.update { it.copy(telegram = null) }
+        if (result.isNew) {
+            mutableState.update {
+                it.copy(step = AuthStep.Name, client = result.client, actionStatus = ActionStatus.Idle)
+            }
+        } else {
+            effects.send(AuthEffect.Authenticated)
+        }
+    }
+
+    private fun cancelTelegram(message: String?) {
+        telegramPolling?.cancel()
+        telegramPolling = null
+        mutableState.update { it.copy(telegram = null, actionStatus = ActionStatus.Idle, message = message) }
     }
 
     private fun onPhoneChanged(value: String) {
@@ -336,6 +421,7 @@ class AuthStore(
 
     private fun reset() {
         resendTimer?.cancel()
+        telegramPolling?.cancel()
         // Способы входа не зависят от сессии — после выхода их не нужно грузить заново.
         mutableState.value = AuthState(methods = mutableState.value.methods)
     }
@@ -398,5 +484,9 @@ class AuthStore(
 
     private companion object {
         const val DEFAULT_RESEND_SECONDS = 60
+        const val TELEGRAM_LINK_PREFIX = "https://t.me/"
+        const val TELEGRAM_POLL_INTERVAL_MS = 2_000L
+        const val TELEGRAM_MAX_POLLS = 330
+        const val TELEGRAM_FAILED_MESSAGE = "Не удалось начать вход через Telegram. Попробуйте ещё раз"
     }
 }

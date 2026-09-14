@@ -4,6 +4,8 @@ import com.volna.app.auth.AuthMethods
 import com.volna.app.auth.AuthRepository
 import com.volna.app.auth.RequestCodeResult
 import com.volna.app.auth.SessionRepository
+import com.volna.app.auth.TelegramLoginStart
+import com.volna.app.auth.TelegramPollResult
 import com.volna.app.auth.VerifyCodeResult
 import com.volna.app.core.error.ApiErrorCode
 import com.volna.app.core.error.AppFailure
@@ -40,6 +42,30 @@ class KtorAuthRepository(
             sessionRepository.saveToken(response.token)
         }
         return result.map { it.toDomain() }
+    }
+
+    override suspend fun telegramStart(): Result<TelegramLoginStart> =
+        apiClient.send<TelegramStartResponseDto>("/auth/telegram/start") {
+            postJson()
+        }.map { TelegramLoginStart(it.pollToken, it.deepLink, it.confirmCode, it.expiresAt) }
+
+    override suspend fun telegramPoll(pollToken: String): Result<TelegramPollResult> {
+        val result = apiClient.send<TelegramPollResponseDto>("/auth/telegram/poll") {
+            postJson()
+            setBody(TelegramPollRequestDto(pollToken))
+        }
+        return result.map { response ->
+            val token = response.token
+            val client = response.client
+            when {
+                response.status == "confirmed" && token != null && client != null -> {
+                    sessionRepository.saveToken(token)
+                    TelegramPollResult.Confirmed(VerifyCodeResult(token = token, client = client.toDomain(), isNew = response.isNew))
+                }
+                response.status == "pending" -> TelegramPollResult.Pending
+                else -> TelegramPollResult.Expired
+            }
+        }
     }
 
     override suspend fun requestCode(phone: Phone): Result<RequestCodeResult> =

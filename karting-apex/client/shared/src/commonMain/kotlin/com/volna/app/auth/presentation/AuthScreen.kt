@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -65,7 +66,10 @@ fun AuthScreen(
         contentAlignment = Alignment.TopCenter,
     ) {
         when (state.step) {
-            AuthStep.Phone -> PhoneStep(state, onIntent)
+            AuthStep.Phone -> {
+                val telegram = state.telegram
+                if (telegram != null) TelegramWaitingStep(telegram, onIntent) else PhoneStep(state, onIntent)
+            }
             AuthStep.Otp -> OtpStep(state, onIntent)
             AuthStep.Name -> NameStep(state, onIntent)
         }
@@ -131,6 +135,26 @@ private fun ColumnScope.PhoneStepMethods(
             "Войдите, чтобы записаться на заезд"
         },
     )
+    val telegramBot = methods.telegramBotUsername
+    if (telegramBot != null) {
+        Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+        SubmitButton(
+            text = "Войти через Telegram",
+            loading = state.isSubmitting,
+            enabled = !state.isSubmitting,
+            onClick = { onIntent(AuthIntent.TelegramLogin) },
+        )
+        TermsText("Номер подтвердит Telegram — код вводить не нужно")
+        if (methods.sms) {
+            Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
+            Text(
+                text = "или по номеру телефона",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(VolnaTheme.tokens.spacing.xs))
+        }
+    }
     if (methods.sms) {
         AuthTextField(
             value = state.phoneInput,
@@ -156,7 +180,7 @@ private fun ColumnScope.PhoneStepMethods(
         )
     }
     if (methods.demo) {
-        if (methods.sms) {
+        if (methods.sms || telegramBot != null) {
             Spacer(Modifier.height(VolnaTheme.tokens.spacing.md))
             Text(
                 text = "или",
@@ -178,8 +202,59 @@ private fun ColumnScope.PhoneStepMethods(
         }
         TermsText("Гостевой аккаунт на сутки: можно записаться\nна заезд, данные потом удалятся")
     }
-    if (!methods.sms && !methods.demo) {
+    if (!methods.sms && !methods.demo && telegramBot == null) {
         TermsText("Вход временно недоступен. Попробуйте позже")
+    }
+}
+
+@Composable
+private fun TelegramWaitingStep(
+    telegram: TelegramLoginState,
+    onIntent: (AuthIntent) -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    AuthStepLayout {
+        AuthHeader(
+            title = "Вход через Telegram",
+            description = "Откройте бота и нажмите в нём\n«Поделиться номером»",
+        )
+        Text(
+            text = "Код сверки",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = telegram.confirmCode,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 8.sp,
+            // Код читается по буквам, а не как слово.
+            modifier = Modifier.semantics { contentDescription = "Код сверки: " + telegram.confirmCode.toList().joinToString(" ") },
+        )
+        TermsText("Бот покажет этот же код. Если коды разные —\nне делитесь номером")
+        // Ссылка открывается по нажатию, а не сама после старта: браузер заблокировал бы
+        // окно, открытое без действия пользователя, и человек сначала видит код.
+        SubmitButton(
+            text = "Открыть Telegram",
+            loading = false,
+            enabled = true,
+            onClick = { runCatching { uriHandler.openUri(telegram.deepLink) } },
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.xs),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Text(
+                text = "Ждём подтверждения в Telegram…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = { onIntent(AuthIntent.TelegramCancel) }) {
+            Text("Отменить", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

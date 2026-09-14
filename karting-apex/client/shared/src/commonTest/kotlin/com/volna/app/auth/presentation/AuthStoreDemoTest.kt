@@ -95,7 +95,7 @@ class AuthStoreDemoTest {
         assertNull(store.state.value.message)
     }
 
-    private class FakeAuthRepository(
+    internal class FakeAuthRepository(
         var methods: Result<AuthMethods> = Result.success(AuthMethods(sms = true, demo = true, telegramBotUsername = null)),
         private val demo: Result<VerifyCodeResult> = Result.success(
             VerifyCodeResult(
@@ -127,12 +127,24 @@ class AuthStoreDemoTest {
             return demo
         }
 
+        var telegramStart: Result<com.volna.app.auth.TelegramLoginStart> = Result.failure(IllegalStateException("not used"))
+        val telegramPolls = ArrayDeque<Result<com.volna.app.auth.TelegramPollResult>>()
+        var pollCalls = 0
+            private set
+
+        override suspend fun telegramStart(): Result<com.volna.app.auth.TelegramLoginStart> = telegramStart
+
+        override suspend fun telegramPoll(pollToken: String): Result<com.volna.app.auth.TelegramPollResult> {
+            pollCalls++
+            return telegramPolls.removeFirstOrNull() ?: Result.success(com.volna.app.auth.TelegramPollResult.Pending)
+        }
+
         override suspend fun requestCode(phone: Phone): Result<RequestCodeResult> = error("not used")
         override suspend fun verifyCode(phone: Phone, code: String): Result<VerifyCodeResult> = error("not used")
         override suspend fun logout(): Result<Unit> = error("not used")
     }
 
-    private object UnusedProfileRepository : ProfileRepository {
+    internal object UnusedProfileRepository : ProfileRepository {
         override suspend fun getProfile(): Result<Client> = error("not used")
         override suspend fun updateName(name: String): Result<Client> = error("not used")
         override suspend fun deleteAccount(): Result<Unit> = error("not used")
