@@ -35,11 +35,16 @@ func TestOpsRepository(t *testing.T) {
 		t.Fatalf("DeleteOldCounters() = %d, %v; want 1", removed, err)
 	}
 
-	if previous, err := repo.SwapState(ctx, "announced_version", "v1"); err != nil || previous != "" {
-		t.Fatalf("first SwapState = %q, %v", previous, err)
+	if value, err := repo.State(ctx, "announced_version"); err != nil || value != "" {
+		t.Fatalf("State(empty) = %q, %v", value, err)
 	}
-	if previous, err := repo.SwapState(ctx, "announced_version", "v2"); err != nil || previous != "v1" {
-		t.Fatalf("second SwapState = %q, %v; want v1", previous, err)
+	for _, version := range []string{"v1", "v2"} {
+		if err := repo.SetState(ctx, "announced_version", version); err != nil {
+			t.Fatalf("SetState(%s) error = %v", version, err)
+		}
+	}
+	if value, err := repo.State(ctx, "announced_version"); err != nil || value != "v2" {
+		t.Fatalf("State() = %q, %v; want v2", value, err)
 	}
 
 	// Данные для сводки.

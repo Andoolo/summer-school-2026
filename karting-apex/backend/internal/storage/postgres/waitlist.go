@@ -256,7 +256,11 @@ UPDATE waitlist_entries w
 SET status = 'notified', notified_at = $1
 FROM clients c, slots s, routes r, instructors i
 WHERE w.id::text = ANY($2)
+  -- Перепроверка после блокировки строки: пока шла выборка, человек мог выйти из очереди
+  -- или удалить аккаунт. Без неё его запись 'left' снова стала бы 'notified'.
+  AND w.status = 'waiting'
   AND c.id = w.client_id
+  AND c.deleted_at IS NULL
   AND s.id = w.slot_id
   AND r.id = s.route_id
   AND i.id = s.instructor_id

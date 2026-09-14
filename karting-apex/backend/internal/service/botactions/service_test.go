@@ -48,11 +48,13 @@ type edit struct {
 
 type fakeBot struct {
 	answers []string
+	alerts  []bool
 	edits   []edit
 }
 
-func (b *fakeBot) AnswerCallbackQuery(_ context.Context, _ string, text string) error {
+func (b *fakeBot) AnswerCallbackQuery(_ context.Context, _ string, text string, showAlert bool) error {
 	b.answers = append(b.answers, text)
+	b.alerts = append(b.alerts, showAlert)
 	return nil
 }
 
@@ -99,7 +101,7 @@ func TestCancelFlowAsksThenCancels(t *testing.T) {
 	if err := s.HandleCallback(ctx, press(CancelKeyboard(bookingID).InlineKeyboard[0][0].CallbackData)); err != nil {
 		t.Fatal(err)
 	}
-	if len(repo.cancelled) != 0 || bot.answers[0] != textAskConfirm {
+	if len(repo.cancelled) != 0 || bot.answers[0] != textAskConfirm || bot.alerts[0] {
 		t.Fatalf("first press cancelled=%v answer=%q", repo.cancelled, bot.answers)
 	}
 	if got := buttons(bot.edits[0].markup); len(got) != 2 || got[0] != actionConfirm+bookingID || got[1] != actionKeep+bookingID {
@@ -125,8 +127,8 @@ func TestCancelFlowAsksThenCancels(t *testing.T) {
 func TestLateCancelWarns(t *testing.T) {
 	repo, bot, changes := activeBooking(90*time.Minute), &fakeBot{}, 0
 	_ = newService(repo, bot, &changes).HandleCallback(context.Background(), press(actionCancel+bookingID))
-	if bot.answers[0] != textAskLate {
-		t.Fatalf("answer = %q, want late cancel warning", bot.answers[0])
+	if bot.answers[0] != textAskLate || !bot.alerts[0] {
+		t.Fatalf("answer = %q (alert %v), want late cancel warning as a dismissible alert", bot.answers[0], bot.alerts[0])
 	}
 }
 

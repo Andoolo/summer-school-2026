@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"summer-school-2026/backend/internal/ops"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,19 +39,25 @@ ON CONFLICT (hour, name) DO UPDATE SET value = ops_counters.value + EXCLUDED.val
 	return nil
 }
 
-func (r *OpsRepository) SwapState(ctx context.Context, key, value string) (string, error) {
-	var previous *string
-	if err := r.db.QueryRow(ctx, `
-WITH prev AS (SELECT value FROM ops_state WHERE key = $1)
-INSERT INTO ops_state (key, value, updated_at) VALUES ($1, $2, now())
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-RETURNING (SELECT value FROM prev)`, key, value).Scan(&previous); err != nil {
-		return "", fmt.Errorf("swap ops state: %w", err)
-	}
-	if previous == nil {
+func (r *OpsRepository) State(ctx context.Context, key string) (string, error) {
+	var value string
+	err := r.db.QueryRow(ctx, `SELECT value FROM ops_state WHERE key = $1`, key).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
-	return *previous, nil
+	if err != nil {
+		return "", fmt.Errorf("read ops state: %w", err)
+	}
+	return value, nil
+}
+
+func (r *OpsRepository) SetState(ctx context.Context, key, value string) error {
+	if _, err := r.db.Exec(ctx, `
+INSERT INTO ops_state (key, value, updated_at) VALUES ($1, $2, now())
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, key, value); err != nil {
+		return fmt.Errorf("write ops state: %w", err)
+	}
+	return nil
 }
 
 // DeleteOldCounters удаляет счётчики старше 30 дней.

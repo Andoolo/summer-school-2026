@@ -276,3 +276,59 @@ RETURNING id::text`, routeID, instructorID, startAt).Scan(&id); err != nil {
 	}
 	return id
 }
+
+// Человек выходит из очереди ровно в момент раздачи мест: выборка кандидатов уже видела
+// его запись 'waiting', но отмечать её предложенной нельзя.
+func TestWaitlistOfferSkipsEntryLeftDuringClaim(t *testing.T) {
+	db, repo, now := prepareWaitlistDB(t)
+	ctx := context.Background()
+	anna := insertNotifyClient(t, db, "+79990019001", 601, true)
+	if _, _, err := repo.Join(ctx, anna, laterSlot, 1, now); err != nil {
+		t.Fatal(err)
+	}
+	exec(t, db, `UPDATE slots SET free_seats = 1 WHERE id = $1`, laterSlot)
+
+	// Выход из очереди в открытой транзакции: строка заблокирована, изменение ещё не видно.
+	leaving, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leaving.Rollback(ctx)
+	if _, err := leaving.Exec(ctx, `UPDATE waitlist_entries SET status = 'left', closed_at = now() WHERE client_id = $1`, anna); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		offers []notify.Offer
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		offers, err := repo.ClaimOffers(ctx, now, waitlist.OfferTTL)
+		done <- result{offers, err}
+	}()
+
+	// Ждём, пока раздача упрётся в блокировку строки, и только тогда выходим из очереди.
+	deadline := time.Now().Add(10 * time.Second)
+	blocked := `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%SET status = ''notified''%'`
+	for count(t, db, blocked) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("ClaimOffers did not block on the row lock")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := leaving.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got := <-done
+	if got.err != nil {
+		t.Fatalf("ClaimOffers() error = %v", got.err)
+	}
+	if len(got.offers) != 0 {
+		t.Fatalf("offers = %+v, want none: the person left the queue", got.offers)
+	}
+	if status := entryStatus(t, db, anna); status != "left" {
+		t.Fatalf("entry status = %q, want left", status)
+	}
+}

@@ -55,7 +55,8 @@ func recoverObservedMiddleware(logger *slog.Logger, observer Observer) func(http
 					logger.Error("panic recovered", "panic", recovered, "request_id", RequestID(r.Context()))
 					if observer != nil {
 						observer.Inc(ops.Panics)
-						observer.Alert("panic:"+routePattern(r), fmt.Sprintf("🔥 Паника в %s %s: %v", r.Method, routePattern(r), recovered))
+						// Само значение паники — только в журнал: в нём может оказаться что угодно.
+						observer.Alert("panic:"+routePattern(r), fmt.Sprintf("🔥 Паника в %s %s: %s", r.Method, routePattern(r), ops.DescribePanic(recovered)))
 					}
 					WriteError(w, http.StatusInternalServerError, CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
 				}

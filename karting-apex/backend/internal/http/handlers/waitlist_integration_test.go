@@ -33,7 +33,7 @@ func TestWaitlistEndpoints(t *testing.T) {
 	insertClientSession(t, ctx, db, clientID, "+79990016001", "waitlist-token")
 
 	joins := 0
-	handler := handlers.NewWaitlistHandler(waitlist.NewService(postgres.NewWaitlistRepository(db)), nil, func() { joins++ })
+	handler := handlers.NewWaitlistHandler(waitlist.NewService(postgres.NewWaitlistRepository(db), func() { joins++ }), nil)
 	router := httpapi.NewRouter(nil, httpapi.RouterOptions{
 		WaitlistStatus: handler.Status, WaitlistJoin: handler.Join, WaitlistLeave: handler.Leave,
 	})

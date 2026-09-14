@@ -49,11 +49,17 @@ func TestClientCallsMethodsAndDecodesResults(t *testing.T) {
 		t.Fatalf("allowed_updates = %v", gotBody["allowed_updates"])
 	}
 
-	if err := client.AnswerCallbackQuery(context.Background(), "cb-1", "Готово"); err != nil {
+	if err := client.AnswerCallbackQuery(context.Background(), "cb-1", "Готово", false); err != nil {
 		t.Fatalf("AnswerCallbackQuery() error = %v", err)
 	}
-	if gotBody["callback_query_id"] != "cb-1" || gotBody["text"] != "Готово" {
+	if _, alert := gotBody["show_alert"]; gotBody["callback_query_id"] != "cb-1" || gotBody["text"] != "Готово" || alert {
 		t.Fatalf("answerCallbackQuery body = %v", gotBody)
+	}
+	if err := client.AnswerCallbackQuery(context.Background(), "cb-2", "Внимание", true); err != nil {
+		t.Fatalf("AnswerCallbackQuery(alert) error = %v", err)
+	}
+	if gotBody["show_alert"] != true {
+		t.Fatalf("answerCallbackQuery alert body = %v", gotBody)
 	}
 	if err := client.EditMessageReplyMarkup(context.Background(), 42, 7, InlineKeyboard{}); err != nil {
 		t.Fatalf("EditMessageReplyMarkup() error = %v", err)

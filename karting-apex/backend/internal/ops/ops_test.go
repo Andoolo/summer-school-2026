@@ -34,13 +34,16 @@ func (m *memoryStore) AddCounters(_ context.Context, hour time.Time, counts map[
 	return nil
 }
 
-func (m *memoryStore) SwapState(_ context.Context, key, value string) (string, error) {
+func (m *memoryStore) State(_ context.Context, key string) (string, error) {
+	return m.state[key], nil
+}
+
+func (m *memoryStore) SetState(_ context.Context, key, value string) error {
 	if m.state == nil {
 		m.state = map[string]string{}
 	}
-	previous := m.state[key]
 	m.state[key] = value
-	return previous, nil
+	return nil
 }
 
 type sentAlert struct {
@@ -49,13 +52,17 @@ type sentAlert struct {
 }
 
 type recordingBot struct {
-	mu   sync.Mutex
-	sent []sentAlert
+	mu      sync.Mutex
+	sent    []sentAlert
+	failing bool
 }
 
 func (b *recordingBot) SendMessage(_ context.Context, chatID int64, text string, _ any) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.failing {
+		return errors.New("telegram is down")
+	}
 	b.sent = append(b.sent, sentAlert{chatID, text})
 	return nil
 }
@@ -246,5 +253,32 @@ func TestDurationText(t *testing.T) {
 		if got := durationText(d); got != want {
 			t.Errorf("durationText(%s) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+func TestAnnounceVersionRetriesAfterFailedSend(t *testing.T) {
+	store, bot := &memoryStore{}, &recordingBot{failing: true}
+	r, _ := newTestRecorder(store, bot, 42)
+	ctx := context.Background()
+
+	if err := AnnounceVersion(ctx, store, r, "abcdef1234567", base); err == nil {
+		t.Fatal("failed send must be reported")
+	}
+	if store.state["announced_version"] != "" {
+		t.Fatal("version must not be marked announced when the message was not delivered")
+	}
+	bot.failing = false
+	if err := AnnounceVersion(ctx, store, r, "abcdef1234567", base); err != nil {
+		t.Fatal(err)
+	}
+	if len(bot.sent) != 1 || store.state["announced_version"] != "abcdef1234567" {
+		t.Fatalf("after retry sent=%d state=%q", len(bot.sent), store.state["announced_version"])
+	}
+
+	// Без администратора ничего не шлём и не помечаем — объявим, когда администратор появится.
+	noAdmin, _ := newTestRecorder(&memoryStore{}, &recordingBot{}, 0)
+	emptyStore := &memoryStore{}
+	if err := AnnounceVersion(ctx, emptyStore, noAdmin, "v9", base); err != nil || emptyStore.state["announced_version"] != "" {
+		t.Fatalf("without admin err=%v state=%q", err, emptyStore.state["announced_version"])
 	}
 }

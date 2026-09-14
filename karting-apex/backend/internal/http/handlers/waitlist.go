@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -24,18 +25,13 @@ const (
 type WaitlistHandler struct {
 	service *waitlist.Service
 	logger  *slog.Logger
-	// onJoin — сигнал рассыльщику: место могло освободиться, пока человек вставал в очередь.
-	onJoin func()
 }
 
-func NewWaitlistHandler(service *waitlist.Service, logger *slog.Logger, onJoin func()) *WaitlistHandler {
+func NewWaitlistHandler(service *waitlist.Service, logger *slog.Logger) *WaitlistHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if onJoin == nil {
-		onJoin = func() {}
-	}
-	return &WaitlistHandler{service: service, logger: logger, onJoin: onJoin}
+	return &WaitlistHandler{service: service, logger: logger}
 }
 
 type waitlistEntryDTO struct {
@@ -93,7 +89,6 @@ func (h *WaitlistHandler) Join(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusOK
 	if created {
 		status = http.StatusCreated
-		h.onJoin()
 	}
 	httpapi.WriteJSON(w, status, entryDTO(entry))
 }
@@ -140,7 +135,7 @@ func (h *WaitlistHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, waitlist.ErrUnauthorized):
 		httpapi.WriteError(w, http.StatusUnauthorized, httpapi.CodeUnauthorized, "Требуется авторизация.", nil)
 	case errors.Is(err, waitlist.ErrInvalidRequest):
-		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, "Укажите от одного до трёх мест.", nil)
+		httpapi.WriteError(w, http.StatusBadRequest, httpapi.CodeBadRequest, fmt.Sprintf("Укажите от 1 до %d мест.", waitlist.MaxSeats), nil)
 	case errors.Is(err, waitlist.ErrSlotNotFound):
 		httpapi.WriteError(w, http.StatusNotFound, httpapi.CodeNotFound, "Заезд не найден.", nil)
 	case errors.Is(err, waitlist.ErrSlotCancelled):
@@ -158,7 +153,7 @@ func (h *WaitlistHandler) writeError(w http.ResponseWriter, err error) {
 		httpapi.WriteError(w, http.StatusForbidden, CodeNotificationsDisabled,
 			"Уведомления в Telegram отключены. Отправьте боту /notify и попробуйте снова.", nil)
 	case errors.Is(err, waitlist.ErrTooManyEntries):
-		httpapi.WriteError(w, http.StatusConflict, CodeWaitlistLimit, "Можно стоять в очереди не больше чем на 5 заездов.", nil)
+		httpapi.WriteError(w, http.StatusConflict, CodeWaitlistLimit, fmt.Sprintf("Можно стоять в очереди не больше чем на %d заездов.", waitlist.MaxActiveEntries), nil)
 	default:
 		h.logger.Error("waitlist request failed", "error", err)
 		httpapi.WriteError(w, http.StatusInternalServerError, httpapi.CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)

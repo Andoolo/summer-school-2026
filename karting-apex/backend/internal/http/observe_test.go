@@ -73,8 +73,8 @@ func TestObserverCountsRequestsErrorsAndPanics(t *testing.T) {
 	if !strings.Contains(joined, "http_5xx|⚠️ API: 5 ошибок 5xx") || !strings.Contains(joined, "GET /routes/{routeID}/leaderboard") {
 		t.Fatalf("5xx alert missing:\n%s", joined)
 	}
-	if !strings.Contains(joined, "Паника в GET /routes/{routeID}: boom") {
-		t.Fatalf("panic alert missing:\n%s", joined)
+	if !strings.Contains(joined, "Паника в GET /routes/{routeID}: значение типа string") || strings.Contains(joined, "boom") {
+		t.Fatalf("panic alert must name the route and hide the panic value:\n%s", joined)
 	}
 	if strings.Contains(joined, "secret-route-id-42") {
 		t.Fatalf("alerts leak path data:\n%s", joined)

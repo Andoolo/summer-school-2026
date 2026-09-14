@@ -100,9 +100,12 @@ func main() {
 		recorder.Run(ctx)
 		close(recorderDone)
 	}()
-	if err := ops.AnnounceVersion(ctx, opsRepo, recorder, cfg.Version, time.Now()); err != nil {
-		logger.Error("announce version failed", "error", err)
-	}
+	// В фоне: недоступный Telegram не должен задерживать старт сервиса.
+	go func() {
+		if err := ops.AnnounceVersion(ctx, opsRepo, recorder, cfg.Version, time.Now()); err != nil && ctx.Err() == nil {
+			logger.Error("announce version failed, will retry on next start", "error", err)
+		}
+	}()
 	stats := ops.NewStats(opsRepo, recorder, cfg.Version)
 
 	go runMaintenance(ctx, db, logger, cfg.DemoLogin, recorder)
@@ -139,7 +142,7 @@ func main() {
 		loginService.WithCallbacks(cancelFromBot.HandleCallback)
 		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
 		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
-		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo), logger, dispatcher.Wake)
+		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo, dispatcher.Wake), logger)
 		waitlistStatus, waitlistJoin, waitlistLeave = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave
 		logger.Info("booking notifications and waitlist enabled")
 	}
@@ -239,7 +242,7 @@ func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, 
 		if removed, err := postgres.DeleteStaleTelegramLogins(ctx, db, time.Now().UTC()); err != nil {
 			if ctx.Err() == nil {
 				logger.Error("telegram login cleanup failed", "error", err)
-				recorder.Alert("maintenance_db", "⚠️ Уборка не может обратиться к базе: "+err.Error())
+				recorder.Alert("maintenance_db", "⚠️ Уборка не может обратиться к базе: "+ops.DescribeError(err))
 			}
 		} else if removed > 0 {
 			logger.Info("stale telegram login requests removed", "count", removed)
@@ -249,7 +252,7 @@ func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, 
 			if err != nil {
 				if ctx.Err() == nil {
 					logger.Error("demo cleanup failed", "error", err)
-					recorder.Alert("maintenance_demo", "⚠️ Уборка гостевых аккаунтов падает: "+err.Error())
+					recorder.Alert("maintenance_demo", "⚠️ Уборка гостевых аккаунтов падает: "+ops.DescribeError(err))
 				}
 				break
 			}

@@ -48,12 +48,17 @@ func TestJoinChecksRequestAndTelegram(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := NewService(tc.repo).Join(ctx, tc.token, "slot", tc.seats)
+			signals := 0
+			_, _, err := NewService(tc.repo, func() { signals++ }).Join(ctx, tc.token, "slot", tc.seats)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("Join() error = %v, want %v", err, tc.want)
 			}
 			if (tc.repo.joins == 1) != tc.joined {
 				t.Fatalf("repository joins = %d, joined want %v", tc.repo.joins, tc.joined)
+			}
+			// Сигнал рассыльщику — только после новой записи в очередь.
+			if (signals == 1) != tc.joined {
+				t.Fatalf("dispatcher signals = %d, want %v", signals, tc.joined)
 			}
 		})
 	}

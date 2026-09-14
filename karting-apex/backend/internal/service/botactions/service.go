@@ -56,7 +56,7 @@ type Repository interface {
 }
 
 type Bot interface {
-	AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string) error
+	AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string, showAlert bool) error
 	EditMessageReplyMarkup(ctx context.Context, chatID, messageID int64, markup telegram.InlineKeyboard) error
 }
 
@@ -121,12 +121,14 @@ func (s *Service) HandleCallback(ctx context.Context, q telegram.CallbackQuery) 
 
 	switch action {
 	case actionCancel:
-		text := textAskConfirm
-		if status, _ := booking.CancellationStatus(now, found.StartAt); status == "late_cancel" {
-			text = textAskLate
-		}
 		s.edit(ctx, chatID, messageID, confirmKeyboard(bookingID))
-		s.answer(ctx, q, text)
+		if status, _ := booking.CancellationStatus(now, found.StartAt); status == "late_cancel" {
+			// Поздняя отмена не освобождает место — это окно, которое нужно закрыть, а не
+			// исчезающая подсказка.
+			s.alert(ctx, q, textAskLate)
+		} else {
+			s.answer(ctx, q, textAskConfirm)
+		}
 	case actionKeep:
 		s.edit(ctx, chatID, messageID, CancelKeyboard(bookingID))
 		s.answer(ctx, q, textKept)
@@ -165,7 +167,13 @@ func (s *Service) edit(ctx context.Context, chatID, messageID int64, markup tele
 }
 
 func (s *Service) answer(ctx context.Context, q telegram.CallbackQuery, text string) {
-	if err := s.bot.AnswerCallbackQuery(ctx, q.ID, text); err != nil {
+	if err := s.bot.AnswerCallbackQuery(ctx, q.ID, text, false); err != nil {
+		s.logger.Warn("telegram answer callback failed", "error", err)
+	}
+}
+
+func (s *Service) alert(ctx context.Context, q telegram.CallbackQuery, text string) {
+	if err := s.bot.AnswerCallbackQuery(ctx, q.ID, text, true); err != nil {
 		s.logger.Warn("telegram answer callback failed", "error", err)
 	}
 }

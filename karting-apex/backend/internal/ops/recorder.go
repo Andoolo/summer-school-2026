@@ -8,6 +8,7 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -112,6 +113,22 @@ func (r *Recorder) Alert(key, text string) {
 		}
 	}()
 }
+
+// Notify отправляет администратору сообщение сразу и возвращает ошибку отправки — для
+// того, что нужно пометить сделанным только после доставки. Без паузы между повторами.
+// Администратор не задан — ErrNoAdmin.
+func (r *Recorder) Notify(ctx context.Context, text string) error {
+	if r == nil || r.adminChat == 0 || r.bot == nil {
+		return ErrNoAdmin
+	}
+	r.logger.Info("ops notify", "text", truncate(text, alertTextMaxRunes))
+	sendCtx, cancel := context.WithTimeout(ctx, alertSendTimeout)
+	defer cancel()
+	return r.bot.SendMessage(sendCtx, r.adminChat, truncate(text, alertTextMaxRunes), nil)
+}
+
+// ErrNoAdmin — администратор для сообщений не задан.
+var ErrNoAdmin = errors.New("admin telegram chat is not configured")
 
 // CountAndAlert считает событие и поднимает алерт, когда за window их набралось threshold.
 func (r *Recorder) CountAndAlert(key string, threshold int, window time.Duration, text func(count int) string) {

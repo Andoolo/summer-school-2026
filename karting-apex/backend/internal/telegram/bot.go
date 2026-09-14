@@ -206,11 +206,15 @@ func (c *Client) SetWebhook(ctx context.Context, url, secret string) error {
 }
 
 // AnswerCallbackQuery отвечает на нажатие кнопки: убирает «часики» на кнопке и показывает
-// короткую всплывающую подсказку (text может быть пустым).
-func (c *Client) AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string) error {
+// подсказку (text может быть пустым). showAlert — окно, которое нужно закрыть, вместо
+// исчезающей подсказки: для того, что нельзя пропустить.
+func (c *Client) AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string, showAlert bool) error {
 	payload := map[string]any{"callback_query_id": callbackQueryID}
 	if text != "" {
 		payload["text"] = text
+	}
+	if showAlert {
+		payload["show_alert"] = true
 	}
 	return c.call(ctx, "answerCallbackQuery", payload, nil)
 }

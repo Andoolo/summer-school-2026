@@ -106,12 +106,54 @@ func (d *Dispatcher) WithObserver(observer Observer) *Dispatcher {
 	return d
 }
 
-// sendFailed считает временный сбой отправки; три за 10 минут — алерт.
-func (d *Dispatcher) sendFailed(err error) {
-	d.observer.Inc(ops.TelegramFailed)
-	d.observer.CountAndAlert("telegram_failed", 3, 10*time.Minute, func(count int) string {
-		return fmt.Sprintf("⚠️ Рассылка в Telegram сбоит: %d ошибок за 10 минут. Последняя: %v", count, err)
-	})
+// sendOutcome — чем закончилась отправка сообщения.
+type sendOutcome int
+
+const (
+	outcomeSent sendOutcome = iota
+	// outcomeBlocked — человек заблокировал бота: чат отвязывается, повтора нет.
+	outcomeBlocked
+	// outcomeRejected — Telegram отказал насовсем (например, чата нет): повтора нет.
+	outcomeRejected
+	// outcomeRetry — временный сбой: отправка повторится.
+	outcomeRetry
+)
+
+// classifySend разбирает результат отправки и ведёт счётчики — одинаково для уведомлений о
+// бронях и предложений из листа ожидания. Чат заблокировавшего бота отвязывается здесь же.
+func (d *Dispatcher) classifySend(ctx context.Context, chatID int64, err error) sendOutcome {
+	if err == nil {
+		d.observer.Inc(ops.TelegramSent)
+		return outcomeSent
+	}
+	var apiErr *telegram.APIError
+	switch {
+	case errors.As(err, &apiErr) && apiErr.Blocked():
+		d.observer.Inc(ops.TelegramBlocked)
+		if err := d.repo.DisableChat(detached(ctx), chatID); err != nil {
+			d.logger.Error("disable telegram chat failed", "error", err)
+		}
+		return outcomeBlocked
+	case errors.As(err, &apiErr) && apiErr.Permanent():
+		d.observer.Inc(ops.TelegramFailed)
+		return outcomeRejected
+	default:
+		d.observer.Inc(ops.TelegramFailed)
+		d.observer.CountAndAlert("telegram_failed", 3, 10*time.Minute, func(count int) string {
+			return fmt.Sprintf("⚠️ Рассылка в Telegram сбоит: %d ошибок за 10 минут. Последняя: %s", count, describeSendError(err))
+		})
+		return outcomeRetry
+	}
+}
+
+// describeSendError — для алерта: у Telegram описание ошибки без данных человека, у
+// остального — только класс ошибки.
+func describeSendError(err error) string {
+	var apiErr *telegram.APIError
+	if errors.As(err, &apiErr) {
+		return fmt.Sprintf("Telegram %d: %s", apiErr.Code, apiErr.Description)
+	}
+	return ops.DescribeError(err)
 }
 
 func NewDispatcher(repo Repository, bot Bot, logger *slog.Logger) *Dispatcher {
@@ -154,7 +196,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 			if err != nil {
 				if ctx.Err() == nil {
 					d.logger.Error("booking notifications claim failed", "kind", kind, "error", err)
-					d.observer.Alert("notify_claim", fmt.Sprintf("⚠️ Рассылка уведомлений не может прочитать базу: %v", err))
+					d.observer.Alert("notify_claim", "⚠️ Рассылка уведомлений не может прочитать базу: "+ops.DescribeError(err))
 				}
 				break
 			}
@@ -178,26 +220,16 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 // deliver возвращает (отправлено, нужно повторить позже).
 func (d *Dispatcher) deliver(ctx context.Context, notice Notice, now time.Time) (bool, bool) {
 	err := d.bot.SendMessage(ctx, notice.ChatID, Text(notice, now), Markup(notice))
-	if err == nil {
-		d.observer.Inc(ops.TelegramSent)
+	switch d.classifySend(ctx, notice.ChatID, err) {
+	case outcomeSent:
 		return true, false
-	}
-
-	var apiErr *telegram.APIError
-	switch {
-	case errors.As(err, &apiErr) && apiErr.Blocked():
-		d.observer.Inc(ops.TelegramBlocked)
+	case outcomeBlocked:
 		d.logger.Info("telegram chat blocked the bot, notifications disabled", "booking_id", notice.BookingID)
-		if err := d.repo.DisableChat(detached(ctx), notice.ChatID); err != nil {
-			d.logger.Error("disable telegram chat failed", "error", err)
-		}
 		return false, false
-	case errors.As(err, &apiErr) && apiErr.Permanent():
-		d.observer.Inc(ops.TelegramFailed)
+	case outcomeRejected:
 		d.logger.Warn("booking notification rejected by telegram", "booking_id", notice.BookingID, "kind", notice.Kind, "error", err)
 		return false, false
 	default:
-		d.sendFailed(err)
 		d.logger.Warn("booking notification failed, will retry", "booking_id", notice.BookingID, "kind", notice.Kind, "error", err)
 		unclaimCtx, cancel := context.WithTimeout(detached(ctx), 5*time.Second)
 		defer cancel()

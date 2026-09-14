@@ -124,7 +124,15 @@ func TestDispatcherReportsToObserver(t *testing.T) {
 	if observer.counts["tg_sent"] != 2 || observer.counts["waitlist_offers"] != 1 || observer.counts["tg_blocked"] != 1 || observer.counts["tg_failed"] != 3 {
 		t.Fatalf("counts = %v", observer.counts)
 	}
-	if len(observer.alerts) != 1 || !strings.Contains(observer.alerts[0], "Рассылка в Telegram сбоит: 3 ошибок") || !strings.Contains(observer.alerts[0], "network: last") {
+	// Блокировка бота считается одинаково для уведомлений и предложений: как «заблокировали»,
+	// но не как ошибка отправки.
+	blockedOffer := &countingObserver{counts: map[string]int{}, window: map[string]int{}}
+	wl2 := &fakeWaitlist{offers: []Offer{offer("blocked-offer", 2)}}
+	newTestDispatcher(&fakeRepo{due: map[Kind][]Notice{}}, bot).WithWaitlist(wl2, 15*time.Minute, "").WithObserver(blockedOffer).RunOnce(context.Background())
+	if blockedOffer.counts["tg_blocked"] != 1 || blockedOffer.counts["tg_failed"] != 0 {
+		t.Fatalf("blocked offer counts = %v, want tg_blocked 1 and no tg_failed", blockedOffer.counts)
+	}
+	if len(observer.alerts) != 1 || !strings.Contains(observer.alerts[0], "Рассылка в Telegram сбоит: 3 ошибок") || strings.Contains(observer.alerts[0], "last") {
 		t.Fatalf("alerts = %v", observer.alerts)
 	}
 }

@@ -80,12 +80,18 @@ type Repository interface {
 }
 
 type Service struct {
-	repo Repository
-	now  func() time.Time
+	repo     Repository
+	now      func() time.Time
+	onJoined func()
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo, now: time.Now}
+// NewService: onJoined — сигнал рассыльщику после новой записи в очередь: место могло
+// освободиться, пока человек вставал в очередь. nil — без сигнала.
+func NewService(repo Repository, onJoined func()) *Service {
+	if onJoined == nil {
+		onJoined = func() {}
+	}
+	return &Service{repo: repo, now: time.Now, onJoined: onJoined}
 }
 
 func (s *Service) Status(ctx context.Context, token, slotID string) (Status, error) {
@@ -121,7 +127,14 @@ func (s *Service) Join(ctx context.Context, token, slotID string, seats int) (En
 	case !client.NotificationsEnabled:
 		return Entry{}, false, ErrNotificationsDisabled
 	}
-	return s.repo.Join(ctx, client.ID, slotID, seats, s.now().UTC())
+	entry, created, err := s.repo.Join(ctx, client.ID, slotID, seats, s.now().UTC())
+	if err != nil {
+		return Entry{}, false, err
+	}
+	if created {
+		s.onJoined()
+	}
+	return entry, created, nil
 }
 
 func (s *Service) Leave(ctx context.Context, token, slotID string) error {
