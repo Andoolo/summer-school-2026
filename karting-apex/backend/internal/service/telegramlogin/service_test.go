@@ -319,3 +319,29 @@ func TestRandomCodeUsesUnambiguousAlphabet(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeTypedIntoBotGetsHint(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	started, _ := f.service.Start(ctx)
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+
+	// Латиница, кириллица и пробелы по краям — всё это код, набранный вручную.
+	for _, typed := range []string{started.ConfirmCode, "T73X", " nt4p ", "Т73Х"} {
+		_ = f.service.HandleUpdate(ctx, privateMessage(777, typed, nil))
+		if reply := f.bot.last(t); !strings.Contains(reply.text, "вводить не нужно") {
+			t.Fatalf("reply to %q = %q, want code hint", typed, reply.text)
+		}
+	}
+	// Код текстом не подтверждает вход — подтверждает только номер.
+	if poll, _ := f.service.Poll(ctx, started.PollToken); poll.Status != StatusPending {
+		t.Fatalf("status = %s, want pending: typed code must not confirm", poll.Status)
+	}
+
+	for _, other := range []string{"привет", "12345", "ok", "как войти?"} {
+		_ = f.service.HandleUpdate(ctx, privateMessage(777, other, nil))
+		if reply := f.bot.last(t); !strings.Contains(reply.text, "бот для входа") {
+			t.Fatalf("reply to %q = %q, want general help", other, reply.text)
+		}
+	}
+}

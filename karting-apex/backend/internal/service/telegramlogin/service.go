@@ -31,6 +31,9 @@ var (
 	ErrNotConfigured = errors.New("telegram login is not configured")
 	phonePattern     = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
 	startPattern     = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
+	// Похоже на код сверки: 4 буквы или цифры. Кириллица тоже — на телефоне легко
+	// набрать «Т» вместо «T».
+	codeLikePattern = regexp.MustCompile(`^[A-Za-zА-Яа-яЁё0-9]{4}$`)
 )
 
 const (
@@ -180,7 +183,10 @@ const (
 	textNoRequest      = "Запрос на вход не найден или устарел. Начните вход в приложении заново."
 	textBadPhone       = "Не получилось войти с этим номером. Начните вход в приложении заново."
 	textDone           = "Готово! Вернитесь в приложение — вход выполнится автоматически."
-	shareButtonText    = "📱 Поделиться номером"
+	textCodeNotNeeded  = "Код сверки вводить не нужно — он только для того, чтобы сравнить его с кодом в приложении.\n\n" +
+		"Если вход уже начат — нажмите кнопку «Поделиться номером» внизу экрана.\n" +
+		"Если нет — вернитесь в приложение и нажмите «Войти через Telegram»."
+	shareButtonText = "📱 Поделиться номером"
 )
 
 func textConfirm(code string) string {
@@ -205,6 +211,10 @@ func (s *Service) HandleUpdate(ctx context.Context, update telegram.Update) erro
 		return s.handleContact(ctx, msg, now)
 	case strings.HasPrefix(msg.Text, "/start"):
 		return s.handleStart(ctx, msg, now)
+	case codeLikePattern.MatchString(strings.TrimSpace(msg.Text)):
+		// Люди пересылают код сверки в бота, думая, что его нужно ввести.
+		s.send(ctx, msg.Chat.ID, textCodeNotNeeded, nil)
+		return nil
 	default:
 		s.send(ctx, msg.Chat.ID, textHelp, nil)
 		return nil
