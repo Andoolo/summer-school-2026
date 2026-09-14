@@ -44,6 +44,16 @@ type Config struct {
 	// DemoLogin — гостевой вход без регистрации. Включён по умолчанию, DEMO_LOGIN=off
 	// выключает.
 	DemoLogin bool
+	// TelegramBotToken — токен бота для входа через Telegram. Секрет: задаётся только в
+	// окружении, в репозиторий не попадает. Пусто — вход через Telegram выключен.
+	TelegramBotToken string
+	// PublicURL — внешний адрес сервиса для вебхука Telegram. На Render подставляется
+	// сам (RENDER_EXTERNAL_URL), PUBLIC_URL переопределяет.
+	PublicURL string
+	// TelegramAPIBase — адрес Bot API вместо официального, для локальной проверки с
+	// имитатором Telegram. Действует только вне production: иначе ошибочная переменная
+	// отправила бы токен бота на чужой сервер.
+	TelegramAPIBase string
 }
 
 func Load() (Config, error) {
@@ -62,17 +72,20 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		HTTPAddr:        stringFromEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:     stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
-		ShutdownTimeout: shutdownTimeout,
-		Dev:             dev,
-		AllowedOrigin:   stringFromEnv("ALLOWED_ORIGIN", ""),
-		AutoMigrate:     os.Getenv("AUTO_MIGRATE") == "true",
-		AutoSeed:        os.Getenv("AUTO_SEED") == "true",
-		MarshalToken:    stringFromEnv("MARSHAL_TOKEN", ""),
-		RateLimit:       rateLimit,
-		TrustProxy:      os.Getenv("TRUST_PROXY") == "true" || os.Getenv("RENDER") == "true",
-		DemoLogin:       os.Getenv("DEMO_LOGIN") != "off",
+		HTTPAddr:         stringFromEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:      stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
+		ShutdownTimeout:  shutdownTimeout,
+		Dev:              dev,
+		AllowedOrigin:    stringFromEnv("ALLOWED_ORIGIN", ""),
+		AutoMigrate:      os.Getenv("AUTO_MIGRATE") == "true",
+		AutoSeed:         os.Getenv("AUTO_SEED") == "true",
+		MarshalToken:     stringFromEnv("MARSHAL_TOKEN", ""),
+		RateLimit:        rateLimit,
+		TrustProxy:       os.Getenv("TRUST_PROXY") == "true" || os.Getenv("RENDER") == "true",
+		DemoLogin:        os.Getenv("DEMO_LOGIN") != "off",
+		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+		PublicURL:        stringFromEnv("PUBLIC_URL", os.Getenv("RENDER_EXTERNAL_URL")),
+		TelegramAPIBase:  os.Getenv("TELEGRAM_API_BASE"),
 	}, nil
 }
 

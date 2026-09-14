@@ -117,6 +117,10 @@ func (r *fakeRepo) CreateClient(context.Context, string, time.Time) (Client, err
 	return Client{ID: "00000000-0000-0000-0000-000000000000", Phone: "+79991234567"}, nil
 }
 
+func (r *fakeRepo) SetClientNameIfEmpty(_ context.Context, clientID, name string) (Client, error) {
+	return Client{ID: clientID, Name: &name, Phone: "+79991234567"}, nil
+}
+
 func (r *fakeRepo) IssueSession(context.Context, string, string, string, time.Time, time.Time) error {
 	return nil
 }
@@ -127,4 +131,31 @@ func (r *fakeRepo) RotateSession(context.Context, string, string, string, time.T
 
 func (r *fakeRepo) RevokeSessionByAccessToken(context.Context, string, time.Time) (bool, error) {
 	return false, nil
+}
+
+func TestLoginByVerifiedPhoneCreatesNamedClient(t *testing.T) {
+	service := NewService(&fakeRepo{}, nil)
+
+	result, err := service.LoginByVerifiedPhone(context.Background(), "+79991234567", "Анна")
+	if err != nil {
+		t.Fatalf("LoginByVerifiedPhone() error = %v", err)
+	}
+	if result.Token == "" || result.RefreshToken == "" {
+		t.Fatal("session tokens must be issued")
+	}
+	if result.Client.Name == nil || *result.Client.Name != "Анна" {
+		t.Fatalf("client name = %v, want Анна from Telegram", result.Client.Name)
+	}
+	if result.IsNew {
+		t.Fatal("IsNew must be false when the name is already known: no name step needed")
+	}
+}
+
+func TestLoginByVerifiedPhoneRejectsInvalidAndDemoPhones(t *testing.T) {
+	service := NewService(&fakeRepo{}, nil)
+	for _, phone := range []string{"79991234567", "+70001234567", ""} {
+		if _, err := service.LoginByVerifiedPhone(context.Background(), phone, "x"); !errors.Is(err, ErrInvalidPhone) {
+			t.Fatalf("LoginByVerifiedPhone(%q) error = %v, want %v", phone, err, ErrInvalidPhone)
+		}
+	}
 }

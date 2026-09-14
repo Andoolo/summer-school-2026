@@ -68,6 +68,7 @@ type Repository interface {
 	OTPStats(ctx context.Context, phone, purpose string, now time.Time) (OTPStats, error)
 	FindClientByPhone(ctx context.Context, phone string) (Client, bool, error)
 	CreateClient(ctx context.Context, phone string, now time.Time) (Client, error)
+	SetClientNameIfEmpty(ctx context.Context, clientID, name string) (Client, error)
 	IssueSession(ctx context.Context, clientID, accessHash, refreshHash string, accessExpiresAt, refreshExpiresAt time.Time) error
 	RotateSession(ctx context.Context, oldRefreshHash, newAccessHash, newRefreshHash string, now, accessExpiresAt, refreshExpiresAt time.Time) (bool, error)
 	RevokeSessionByAccessToken(ctx context.Context, accessHash string, now time.Time) (bool, error)
@@ -205,6 +206,58 @@ func (s *Service) VerifyCode(ctx context.Context, phone, code string) (VerifyCod
 		AccessTTLSeconds: int(s.sessionTTL.Seconds()),
 		Client:           client,
 		IsNew:            isNew,
+	}, nil
+}
+
+// LoginByVerifiedPhone выдаёт сессию по номеру, который уже подтвердил внешний канал
+// (Telegram). Кода здесь нет — вызывать только после такой проверки.
+//
+// name — имя из внешнего канала: задаётся только клиенту без имени, чтобы не затереть
+// то, что человек указал сам.
+func (s *Service) LoginByVerifiedPhone(ctx context.Context, phone, name string) (VerifyCodeResult, error) {
+	if !phonePattern.MatchString(phone) || IsDemoPhone(phone) {
+		return VerifyCodeResult{}, ErrInvalidPhone
+	}
+	now := s.now().UTC()
+
+	client, found, err := s.repo.FindClientByPhone(ctx, phone)
+	if err != nil {
+		return VerifyCodeResult{}, err
+	}
+	created := false
+	if !found {
+		client, err = s.repo.CreateClient(ctx, phone, now)
+		if err != nil {
+			return VerifyCodeResult{}, err
+		}
+		created = true
+	}
+	if name != "" && client.Name == nil {
+		client, err = s.repo.SetClientNameIfEmpty(ctx, client.ID, name)
+		if err != nil {
+			return VerifyCodeResult{}, err
+		}
+	}
+
+	token, err := randomToken()
+	if err != nil {
+		return VerifyCodeResult{}, err
+	}
+	refresh, err := randomToken()
+	if err != nil {
+		return VerifyCodeResult{}, err
+	}
+	if err := s.repo.IssueSession(ctx, client.ID, HashToken(token), HashToken(refresh), now.Add(s.sessionTTL), now.Add(s.refreshTTL)); err != nil {
+		return VerifyCodeResult{}, err
+	}
+	return VerifyCodeResult{
+		Token:            token,
+		RefreshToken:     refresh,
+		AccessTTLSeconds: int(s.sessionTTL.Seconds()),
+		Client:           client,
+		// IsNew управляет шагом «Как вас зовут?» в приложении. Если имя пришло из
+		// Telegram, спрашивать его снова незачем.
+		IsNew: created && client.Name == nil,
 	}, nil
 }
 

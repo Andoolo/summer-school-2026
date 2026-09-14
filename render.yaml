@@ -74,6 +74,11 @@ services:
       # в панели: sync: false не даёт секрету попасть в репозиторий.
       - key: MARSHAL_TOKEN
         sync: false
+      # Токен бота для входа через Telegram (@BotFather). Секрет — только в панели.
+      # Пусто — кнопка Telegram не показывается. Вебхук сервер регистрирует сам по
+      # RENDER_EXTERNAL_URL, а его секрет выводится из токена: других настроек не нужно.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
 
   # ---------- Фронтенд: статика, собранная из Kotlin/Wasm ----------
   - type: web

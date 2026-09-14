@@ -16,7 +16,9 @@ import (
 	"summer-school-2026/backend/internal/service/auth"
 	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/profile"
+	"summer-school-2026/backend/internal/service/telegramlogin"
 	"summer-school-2026/backend/internal/storage/postgres"
+	"summer-school-2026/backend/internal/telegram"
 	"summer-school-2026/backend/migrations"
 	"summer-school-2026/backend/seed"
 
@@ -65,10 +67,33 @@ func main() {
 	var demoLogin http.HandlerFunc
 	if cfg.DemoLogin {
 		demoLogin = handlers.DemoLoginHandler(auth.NewDemoService(postgres.NewDemoRepository(db), auth.DefaultDemoConfig()), logger)
-		go runDemoCleanup(ctx, db, logger)
 		logger.Info("demo login enabled")
 	}
-	authMethods := handlers.AuthMethodsHandler(handlers.AuthMethods{SMS: cfg.Dev, Demo: cfg.DemoLogin})
+	go runMaintenance(ctx, db, logger, cfg.DemoLogin)
+
+	// Вход через Telegram включается токеном бота. Бот подключается в фоне; до этого
+	// кнопка Telegram в приложении не показывается.
+	telegramUsername := func() string { return "" }
+	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
+	if cfg.TelegramBotToken != "" {
+		botClient := telegram.NewClient(cfg.TelegramBotToken)
+		if cfg.TelegramAPIBase != "" {
+			if cfg.Dev {
+				botClient.WithAPIBase(cfg.TelegramAPIBase)
+				logger.Warn("telegram bot api base overridden for local testing")
+			} else {
+				logger.Error("TELEGRAM_API_BASE ignored in production")
+			}
+		}
+		webhookSecret := telegram.WebhookSecret(cfg.TelegramBotToken)
+		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger)
+		go connector.Run(ctx)
+		telegramUsername = connector.Username
+		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger)
+		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
+		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
+	}
+	authMethods := handlers.AuthMethodsHandler(handlers.AuthMethods{SMS: cfg.Dev, Demo: cfg.DemoLogin, TelegramBotUsername: telegramUsername})
 	profileRepo := postgres.NewProfileRepository(db)
 	profileService := profile.NewService(profileRepo, logger)
 	profileHandler := handlers.NewProfileHandler(profileService)
@@ -101,6 +126,9 @@ func main() {
 			AuthRefresh:       authHandler.Refresh,
 			AuthDemo:          demoLogin,
 			AuthMethods:       authMethods,
+			TelegramStart:     telegramStart,
+			TelegramPoll:      telegramPoll,
+			TelegramWebhook:   telegramWebhook,
 			Profile:           profileHandler,
 			Bookings:          bookingHandler,
 			Slots:             slotHandler,
@@ -141,14 +169,21 @@ func main() {
 	logger.Info("api server stopped")
 }
 
-// runDemoCleanup удаляет истёкших гостей при старте и затем раз в час. На бесплатном
-// Render сервис засыпает, поэтому запуск при старте важнее расписания: он срабатывает
-// при каждом пробуждении.
-func runDemoCleanup(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger) {
+// runMaintenance при старте и затем раз в час удаляет истёкших гостей и старые запросы
+// входа через Telegram (в них номера телефонов). На бесплатном Render сервис засыпает,
+// поэтому запуск при старте важнее расписания: он срабатывает при каждом пробуждении.
+func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, demoEnabled bool) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
-		for {
+		if removed, err := postgres.DeleteStaleTelegramLogins(ctx, db, time.Now().UTC()); err != nil {
+			if ctx.Err() == nil {
+				logger.Error("telegram login cleanup failed", "error", err)
+			}
+		} else if removed > 0 {
+			logger.Info("stale telegram login requests removed", "count", removed)
+		}
+		for demoEnabled {
 			removed, err := postgres.CleanupExpiredDemoClients(ctx, db, time.Now().UTC(), 200)
 			if err != nil {
 				if ctx.Err() == nil {

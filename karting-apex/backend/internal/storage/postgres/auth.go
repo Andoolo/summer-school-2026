@@ -90,6 +90,20 @@ RETURNING id::text, name, phone, created_at`, phone, now).Scan(&client.ID, &clie
 	return client, nil
 }
 
+// SetClientNameIfEmpty задаёт имя только клиенту без имени и возвращает актуального клиента.
+func (r *AuthRepository) SetClientNameIfEmpty(ctx context.Context, clientID, name string) (auth.Client, error) {
+	var client auth.Client
+	err := r.db.QueryRow(ctx, `
+UPDATE clients
+SET name = COALESCE(name, $2)
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id::text, name, phone, created_at`, clientID, name).Scan(&client.ID, &client.Name, &client.Phone, &client.CreatedAt)
+	if err != nil {
+		return auth.Client{}, fmt.Errorf("set client name: %w", err)
+	}
+	return client, nil
+}
+
 // IssueSession атомарно создаёт access-сессию и связанный с ней refresh-токен (одна транзакция).
 func (r *AuthRepository) IssueSession(ctx context.Context, clientID, accessHash, refreshHash string, accessExpiresAt, refreshExpiresAt time.Time) error {
 	tx, err := r.db.Begin(ctx)

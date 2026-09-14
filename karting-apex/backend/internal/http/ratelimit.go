@@ -37,6 +37,10 @@ func newRateRules() (general rateRule, byRoute map[string]rateRule) {
 	verifyCode := rateRule{name: "verify_code", limiter: newWindowLimiter(30, 10*time.Minute)}
 	// Каждый гостевой вход — новый аккаунт в базе; живому человеку хватит пары входов.
 	demoLogin := rateRule{name: "demo_login", limiter: newWindowLimiter(5, time.Hour)}
+	// Каждый старт — строка в базе и ссылка на бота.
+	telegramStart := rateRule{name: "telegram_start", limiter: newWindowLimiter(10, 10*time.Minute)}
+	// Приложение опрашивает раз в 2 секунды, запрос живёт 10 минут: 300 опросов на вход.
+	telegramPoll := rateRule{name: "telegram_poll", limiter: newWindowLimiter(400, 10*time.Minute)}
 	return rateRule{name: "general", limiter: newWindowLimiter(300, time.Minute)},
 		map[string]rateRule{
 			"POST /auth/request-code":          requestCode,
@@ -44,6 +48,8 @@ func newRateRules() (general rateRule, byRoute map[string]rateRule) {
 			"POST /auth/verify-code":           verifyCode,
 			"POST /profile/phone/confirm":      verifyCode,
 			"POST /auth/demo":                  demoLogin,
+			"POST /auth/telegram/start":        telegramStart,
+			"POST /auth/telegram/poll":         telegramPoll,
 		}
 }
 

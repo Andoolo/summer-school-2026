@@ -30,6 +30,11 @@ type RouterOptions struct {
 	AuthDemo http.HandlerFunc
 	// AuthMethods — GET /auth/methods (какие способы входа показывать в приложении).
 	AuthMethods http.HandlerFunc
+	// Вход через Telegram: старт, опрос и вебхук бота. nil — выключено (не задан
+	// TELEGRAM_BOT_TOKEN).
+	TelegramStart   http.HandlerFunc
+	TelegramPoll    http.HandlerFunc
+	TelegramWebhook http.HandlerFunc
 	// RouteLeaderboard — ручной маршрут GET /routes/{routeID}/leaderboard (рекорды трассы, картинг).
 	RouteLeaderboard http.HandlerFunc
 	// RoutePassport — ручной маршрут GET /routes/{routeID} (карточка трассы, картинг F5).
@@ -103,6 +108,15 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 	}
 	if opts.AuthMethods != nil {
 		router.Get("/auth/methods", opts.AuthMethods)
+	}
+	if opts.TelegramStart != nil {
+		router.Post("/auth/telegram/start", opts.TelegramStart)
+	}
+	if opts.TelegramPoll != nil {
+		router.Post("/auth/telegram/poll", opts.TelegramPoll)
+	}
+	if opts.TelegramWebhook != nil {
+		router.Post("/telegram/webhook", opts.TelegramWebhook)
 	}
 	if opts.RouteLeaderboard != nil {
 		router.Get("/routes/{routeID}/leaderboard", opts.RouteLeaderboard)

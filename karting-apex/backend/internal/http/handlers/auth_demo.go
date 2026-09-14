@@ -74,8 +74,9 @@ type AuthMethods struct {
 	// приходит в ответе API.
 	SMS  bool
 	Demo bool
-	// TelegramBotUsername — имя бота без @; пусто — вход через Telegram выключен.
-	TelegramBotUsername string
+	// TelegramBotUsername возвращает имя бота без @; пусто — вход через Telegram
+	// выключен. Функция, а не строка: бот подключается в фоне уже после старта.
+	TelegramBotUsername func() string
 }
 
 type authMethodsDTO struct {
@@ -92,8 +93,10 @@ type telegramMethodDTO struct {
 func AuthMethodsHandler(methods AuthMethods) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body := authMethodsDTO{SMS: methods.SMS, Demo: methods.Demo}
-		if methods.TelegramBotUsername != "" {
-			body.Telegram = &telegramMethodDTO{BotUsername: methods.TelegramBotUsername}
+		if methods.TelegramBotUsername != nil {
+			if username := methods.TelegramBotUsername(); username != "" {
+				body.Telegram = &telegramMethodDTO{BotUsername: username}
+			}
 		}
 		httpapi.WriteJSON(w, http.StatusOK, body)
 	}
