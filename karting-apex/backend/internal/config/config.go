@@ -54,6 +54,12 @@ type Config struct {
 	// имитатором Telegram. Действует только вне production: иначе ошибочная переменная
 	// отправила бы токен бота на чужой сервер.
 	TelegramAPIBase string
+	// AdminTelegramChatID — чат администратора: алерты и команда /stats. Свой chat id
+	// бот присылает по команде /whoami. 0 — алерты только в журнал.
+	AdminTelegramChatID int64
+	// Version — версия (коммит) для сводки и сообщения о выкладке. На Render —
+	// RENDER_GIT_COMMIT, APP_VERSION переопределяет.
+	Version string
 }
 
 func Load() (Config, error) {
@@ -71,6 +77,11 @@ func Load() (Config, error) {
 		rateLimit = false
 	}
 
+	adminChat, err := int64FromEnv("ADMIN_TELEGRAM_CHAT_ID")
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		HTTPAddr:         stringFromEnv("HTTP_ADDR", ":8080"),
 		DatabaseURL:      stringFromEnv("DATABASE_URL", "postgres://volna:volna@localhost:5432/volna?sslmode=disable"),
@@ -86,6 +97,9 @@ func Load() (Config, error) {
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		PublicURL:        stringFromEnv("PUBLIC_URL", os.Getenv("RENDER_EXTERNAL_URL")),
 		TelegramAPIBase:  os.Getenv("TELEGRAM_API_BASE"),
+
+		AdminTelegramChatID: adminChat,
+		Version:             stringFromEnv("APP_VERSION", os.Getenv("RENDER_GIT_COMMIT")),
 	}, nil
 }
 
@@ -115,4 +129,16 @@ func durationFromEnv(key string, fallback time.Duration) (time.Duration, error) 
 	}
 
 	return time.Duration(seconds) * time.Second, nil
+}
+
+func int64FromEnv(key string) (int64, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", key, err)
+	}
+	return parsed, nil
 }

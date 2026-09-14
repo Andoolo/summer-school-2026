@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"summer-school-2026/backend/internal/ops"
 	"summer-school-2026/backend/internal/telegram"
 )
 
@@ -50,6 +51,7 @@ func (d *Dispatcher) runWaitlist(ctx context.Context) int {
 	if err != nil {
 		if ctx.Err() == nil {
 			d.logger.Error("waitlist offers claim failed", "error", err)
+			d.observer.Alert("waitlist_claim", "⚠️ Лист ожидания не может раздать места: "+err.Error())
 		}
 		return 0
 	}
@@ -58,13 +60,17 @@ func (d *Dispatcher) runWaitlist(ctx context.Context) int {
 		err := d.bot.SendMessage(ctx, offer.ChatID, OfferText(offer, d.offerTTL, d.appURL), nil)
 		if err == nil {
 			sent++
+			d.observer.Inc(ops.TelegramSent)
+			d.observer.Inc(ops.WaitlistOffers)
 			continue
 		}
 		var apiErr *telegram.APIError
 		switch {
 		case errors.As(err, &apiErr) && apiErr.Permanent():
 			d.logger.Warn("waitlist offer rejected by telegram", "entry_id", offer.EntryID, "error", err)
+			d.observer.Inc(ops.TelegramFailed)
 			if apiErr.Blocked() {
+				d.observer.Inc(ops.TelegramBlocked)
 				if err := d.repo.DisableChat(detached(ctx), offer.ChatID); err != nil {
 					d.logger.Error("disable telegram chat failed", "error", err)
 				}
@@ -74,6 +80,7 @@ func (d *Dispatcher) runWaitlist(ctx context.Context) int {
 				d.logger.Error("expire waitlist offer failed", "entry_id", offer.EntryID, "error", err)
 			}
 		default:
+			d.sendFailed(err)
 			d.logger.Warn("waitlist offer failed, will retry", "entry_id", offer.EntryID, "error", err)
 			releaseCtx, cancel := context.WithTimeout(detached(ctx), 5*time.Second)
 			if err := d.waitlist.ReleaseOffer(releaseCtx, offer.EntryID); err != nil {

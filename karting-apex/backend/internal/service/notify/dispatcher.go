@@ -11,9 +11,11 @@ package notify
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
+	"summer-school-2026/backend/internal/ops"
 	"summer-school-2026/backend/internal/telegram"
 )
 
@@ -79,13 +81,44 @@ type Dispatcher struct {
 	waitlist WaitlistRepository
 	offerTTL time.Duration
 	appURL   string
+
+	observer Observer
+}
+
+// Observer — счётчики и алерты (ops.Recorder).
+type Observer interface {
+	Inc(name string)
+	Alert(key, text string)
+	CountAndAlert(key string, threshold int, window time.Duration, text func(count int) string)
+}
+
+type noopObserver struct{}
+
+func (noopObserver) Inc(string)                                                 {}
+func (noopObserver) Alert(string, string)                                       {}
+func (noopObserver) CountAndAlert(string, int, time.Duration, func(int) string) {}
+
+// WithObserver подключает счётчики отправок и алерты о сбоях рассылки.
+func (d *Dispatcher) WithObserver(observer Observer) *Dispatcher {
+	if observer != nil {
+		d.observer = observer
+	}
+	return d
+}
+
+// sendFailed считает временный сбой отправки; три за 10 минут — алерт.
+func (d *Dispatcher) sendFailed(err error) {
+	d.observer.Inc(ops.TelegramFailed)
+	d.observer.CountAndAlert("telegram_failed", 3, 10*time.Minute, func(count int) string {
+		return fmt.Sprintf("⚠️ Рассылка в Telegram сбоит: %d ошибок за 10 минут. Последняя: %v", count, err)
+	})
 }
 
 func NewDispatcher(repo Repository, bot Bot, logger *slog.Logger) *Dispatcher {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Dispatcher{repo: repo, bot: bot, logger: logger, now: time.Now, interval: DefaultInterval, wake: make(chan struct{}, 1)}
+	return &Dispatcher{repo: repo, bot: bot, logger: logger, now: time.Now, interval: DefaultInterval, wake: make(chan struct{}, 1), observer: noopObserver{}}
 }
 
 // Wake просит рассыльщика пройтись раньше срока. Не блокирует: если просьба уже
@@ -121,6 +154,7 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 			if err != nil {
 				if ctx.Err() == nil {
 					d.logger.Error("booking notifications claim failed", "kind", kind, "error", err)
+					d.observer.Alert("notify_claim", fmt.Sprintf("⚠️ Рассылка уведомлений не может прочитать базу: %v", err))
 				}
 				break
 			}
@@ -145,21 +179,25 @@ func (d *Dispatcher) RunOnce(ctx context.Context) int {
 func (d *Dispatcher) deliver(ctx context.Context, notice Notice, now time.Time) (bool, bool) {
 	err := d.bot.SendMessage(ctx, notice.ChatID, Text(notice, now), Markup(notice))
 	if err == nil {
+		d.observer.Inc(ops.TelegramSent)
 		return true, false
 	}
 
 	var apiErr *telegram.APIError
 	switch {
 	case errors.As(err, &apiErr) && apiErr.Blocked():
+		d.observer.Inc(ops.TelegramBlocked)
 		d.logger.Info("telegram chat blocked the bot, notifications disabled", "booking_id", notice.BookingID)
 		if err := d.repo.DisableChat(detached(ctx), notice.ChatID); err != nil {
 			d.logger.Error("disable telegram chat failed", "error", err)
 		}
 		return false, false
 	case errors.As(err, &apiErr) && apiErr.Permanent():
+		d.observer.Inc(ops.TelegramFailed)
 		d.logger.Warn("booking notification rejected by telegram", "booking_id", notice.BookingID, "kind", notice.Kind, "error", err)
 		return false, false
 	default:
+		d.sendFailed(err)
 		d.logger.Warn("booking notification failed, will retry", "booking_id", notice.BookingID, "kind", notice.Kind, "error", err)
 		unclaimCtx, cancel := context.WithTimeout(detached(ctx), 5*time.Second)
 		defer cancel()

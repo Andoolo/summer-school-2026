@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -112,6 +113,16 @@ type Service struct {
 	now       func() time.Time
 	username  func() string
 	callbacks func(context.Context, telegram.CallbackQuery) error
+	adminChat int64
+	stats     func(context.Context) (string, error)
+}
+
+// WithAdmin включает /stats для чата администратора. Остальным команда не видна: они
+// получают обычную справку.
+func (s *Service) WithAdmin(chatID int64, stats func(context.Context) (string, error)) *Service {
+	s.adminChat = chatID
+	s.stats = stats
+	return s
 }
 
 // WithCallbacks передаёт нажатия кнопок под сообщениями (например, «Отменить бронь»)
@@ -245,6 +256,17 @@ func (s *Service) HandleUpdate(ctx context.Context, update telegram.Update) erro
 		return s.handleContact(ctx, msg, now)
 	case strings.HasPrefix(msg.Text, "/start"):
 		return s.handleStart(ctx, msg, now)
+	case isCommand(msg.Text, "/whoami"):
+		s.send(ctx, msg.Chat.ID, "Ваш Telegram chat id: "+strconv.FormatInt(msg.Chat.ID, 10), nil)
+		return nil
+	case isCommand(msg.Text, "/stats") && s.stats != nil && s.adminChat != 0 && msg.Chat.ID == s.adminChat:
+		text, err := s.stats(ctx)
+		if err != nil {
+			s.send(ctx, msg.Chat.ID, "Не удалось собрать сводку: база недоступна. Подробности — в журнале сервиса.", nil)
+			return err
+		}
+		s.send(ctx, msg.Chat.ID, text, nil)
+		return nil
 	case isCommand(msg.Text, "/stop"):
 		return s.handleNotifications(ctx, msg.Chat.ID, false)
 	case isCommand(msg.Text, "/notify"):

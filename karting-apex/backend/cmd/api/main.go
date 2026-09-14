@@ -13,6 +13,7 @@ import (
 	"summer-school-2026/backend/internal/config"
 	httpapi "summer-school-2026/backend/internal/http"
 	"summer-school-2026/backend/internal/http/handlers"
+	"summer-school-2026/backend/internal/ops"
 	"summer-school-2026/backend/internal/service/auth"
 	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/botactions"
@@ -72,16 +73,11 @@ func main() {
 		demoLogin = handlers.DemoLoginHandler(auth.NewDemoService(postgres.NewDemoRepository(db), auth.DefaultDemoConfig()), logger)
 		logger.Info("demo login enabled")
 	}
-	go runMaintenance(ctx, db, logger, cfg.DemoLogin)
-
-	// Вход через Telegram включается токеном бота. Бот подключается в фоне; до этого
-	// кнопка Telegram в приложении не показывается.
-	telegramUsername := func() string { return "" }
-	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
-	onBookingChange := func() {}
-	var waitlistStatus, waitlistJoin, waitlistLeave http.HandlerFunc
+	// Бот нужен и входу через Telegram, и алертам администратору.
+	var botClient *telegram.Client
+	var alertBot ops.Sender
 	if cfg.TelegramBotToken != "" {
-		botClient := telegram.NewClient(cfg.TelegramBotToken)
+		botClient = telegram.NewClient(cfg.TelegramBotToken)
 		if cfg.TelegramAPIBase != "" {
 			if cfg.Dev {
 				botClient.WithAPIBase(cfg.TelegramAPIBase)
@@ -90,22 +86,56 @@ func main() {
 				logger.Error("TELEGRAM_API_BASE ignored in production")
 			}
 		}
+		alertBot = botClient
+	}
+	if cfg.AdminTelegramChatID != 0 && alertBot == nil {
+		logger.Warn("ADMIN_TELEGRAM_CHAT_ID is set, but TELEGRAM_BOT_TOKEN is empty: alerts go to logs only")
+	}
+
+	// Наблюдаемость: счётчики в базе, алерты администратору, сводка /stats.
+	opsRepo := postgres.NewOpsRepository(db)
+	recorder := ops.NewRecorder(opsRepo, alertBot, cfg.AdminTelegramChatID, logger)
+	recorderDone := make(chan struct{})
+	go func() {
+		recorder.Run(ctx)
+		close(recorderDone)
+	}()
+	if err := ops.AnnounceVersion(ctx, opsRepo, recorder, cfg.Version, time.Now()); err != nil {
+		logger.Error("announce version failed", "error", err)
+	}
+	stats := ops.NewStats(opsRepo, recorder, cfg.Version)
+
+	go runMaintenance(ctx, db, logger, cfg.DemoLogin, recorder)
+
+	// Вход через Telegram включается токеном бота. Бот подключается в фоне; до этого
+	// кнопка Telegram в приложении не показывается.
+	telegramUsername := func() string { return "" }
+	var telegramStart, telegramPoll, telegramWebhook http.HandlerFunc
+	onBookingChange := func() {}
+	var waitlistStatus, waitlistJoin, waitlistLeave http.HandlerFunc
+	if botClient != nil {
 		webhookSecret := telegram.WebhookSecret(cfg.TelegramBotToken)
-		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger)
+		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger).WithAdminChat(cfg.AdminTelegramChatID)
 		go connector.Run(ctx)
 		telegramUsername = connector.Username
-		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger)
+		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger).
+			WithAdmin(cfg.AdminTelegramChatID, stats.Text)
 
 		// Уведомления о бронях идут через того же бота. Слать можно и до подключения
 		// вебхука: отправка сообщений от него не зависит.
 		// Лист ожидания — там же: предложения мест рассылает тот же рассыльщик.
 		waitlistRepo := postgres.NewWaitlistRepository(db)
 		dispatcher := notify.NewDispatcher(postgres.NewNotificationRepository(db), botClient, logger).
-			WithWaitlist(waitlistRepo, waitlist.OfferTTL, cfg.AllowedOrigin)
+			WithWaitlist(waitlistRepo, waitlist.OfferTTL, cfg.AllowedOrigin).
+			WithObserver(recorder)
 		go dispatcher.Run(ctx)
 		onBookingChange = dispatcher.Wake
 		// Кнопка «Отменить бронь» под уведомлениями: нажатия приходят в тот же вебхук.
-		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), botClient, dispatcher.Wake, logger)
+		onBotCancel := func() {
+			recorder.Inc(ops.BotCancellations)
+			dispatcher.Wake()
+		}
+		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), botClient, onBotCancel, logger)
 		loginService.WithCallbacks(cancelFromBot.HandleCallback)
 		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
 		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
@@ -163,6 +193,7 @@ func main() {
 			Dev:               cfg.Dev,
 			AllowedOrigin:     cfg.AllowedOrigin,
 			RateLimit:         rateLimit,
+			Observer:          recorder,
 		}),
 		// Таймауты на всё соединение, а не только на заголовки: иначе медленный клиент
 		// (slowloris) держит соединение сколь угодно долго, отправляя тело по байту.
@@ -189,19 +220,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Последний сброс счётчиков в базу — иначе события перед сном Render потерялись бы.
+	select {
+	case <-recorderDone:
+	case <-time.After(6 * time.Second):
+		logger.Warn("ops counters final flush timed out")
+	}
 	logger.Info("api server stopped")
 }
 
 // runMaintenance при старте и затем раз в час удаляет истёкших гостей и старые запросы
 // входа через Telegram (в них номера телефонов). На бесплатном Render сервис засыпает,
 // поэтому запуск при старте важнее расписания: он срабатывает при каждом пробуждении.
-func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, demoEnabled bool) {
+func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, demoEnabled bool, recorder *ops.Recorder) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
 		if removed, err := postgres.DeleteStaleTelegramLogins(ctx, db, time.Now().UTC()); err != nil {
 			if ctx.Err() == nil {
 				logger.Error("telegram login cleanup failed", "error", err)
+				recorder.Alert("maintenance_db", "⚠️ Уборка не может обратиться к базе: "+err.Error())
 			}
 		} else if removed > 0 {
 			logger.Info("stale telegram login requests removed", "count", removed)
@@ -211,6 +249,7 @@ func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, 
 			if err != nil {
 				if ctx.Err() == nil {
 					logger.Error("demo cleanup failed", "error", err)
+					recorder.Alert("maintenance_demo", "⚠️ Уборка гостевых аккаунтов падает: "+err.Error())
 				}
 				break
 			}
@@ -220,6 +259,9 @@ func runMaintenance(ctx context.Context, db *pgxpool.Pool, logger *slog.Logger, 
 			if removed < 200 {
 				break
 			}
+		}
+		if _, err := postgres.DeleteOldCounters(ctx, db, time.Now().UTC()); err != nil && ctx.Err() == nil {
+			logger.Error("ops counters cleanup failed", "error", err)
 		}
 		select {
 		case <-ctx.Done():

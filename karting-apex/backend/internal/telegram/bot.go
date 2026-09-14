@@ -238,6 +238,14 @@ func (c *Client) SetMyCommands(ctx context.Context, commands []BotCommand) error
 	return c.call(ctx, "setMyCommands", map[string]any{"commands": commands}, nil)
 }
 
+// SetChatCommands задаёт меню команд для одного чата (поверх общего меню).
+func (c *Client) SetChatCommands(ctx context.Context, chatID int64, commands []BotCommand) error {
+	return c.call(ctx, "setMyCommands", map[string]any{
+		"commands": commands,
+		"scope":    map[string]any{"type": "chat", "chat_id": chatID},
+	}, nil)
+}
+
 // SendMessage отправляет текст без разметки (parse_mode не задан): имя пользователя
 // или код в тексте не сломают сообщение спецсимволами.
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, markup any) error {

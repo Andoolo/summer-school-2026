@@ -445,3 +445,41 @@ func TestCallbacksArePassedToHandler(t *testing.T) {
 		t.Fatal("callback must not trigger login messages")
 	}
 }
+
+func TestAdminCommands(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/whoami", nil))
+	if f.bot.last(t).text != "Ваш Telegram chat id: 555" {
+		t.Fatalf("/whoami reply = %q", f.bot.last(t).text)
+	}
+
+	// Администратор не задан — /stats как неизвестная команда.
+	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil))
+	if !strings.Contains(f.bot.last(t).text, "бот приложения «Апекс»") {
+		t.Fatalf("/stats without admin reply = %q", f.bot.last(t).text)
+	}
+
+	calls := 0
+	f.service.WithAdmin(555, func(context.Context) (string, error) {
+		calls++
+		return "📊 сводка", nil
+	})
+	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stats", nil))
+	if calls != 0 || !strings.Contains(f.bot.last(t).text, "бот приложения «Апекс»") {
+		t.Fatalf("non-admin /stats: calls=%d reply=%q", calls, f.bot.last(t).text)
+	}
+	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil))
+	if calls != 1 || f.bot.last(t).text != "📊 сводка" {
+		t.Fatalf("admin /stats: calls=%d reply=%q", calls, f.bot.last(t).text)
+	}
+
+	f.service.WithAdmin(555, func(context.Context) (string, error) { return "", errors.New("db down") })
+	if err := f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil)); err == nil {
+		t.Fatal("stats error must be returned for logging")
+	}
+	if !strings.Contains(f.bot.last(t).text, "Не удалось собрать сводку") {
+		t.Fatalf("stats failure reply = %q", f.bot.last(t).text)
+	}
+}

@@ -90,3 +90,41 @@ func TestOfferText(t *testing.T) {
 		t.Error("no link expected without app URL")
 	}
 }
+
+type countingObserver struct {
+	counts map[string]int
+	alerts []string
+	window map[string]int
+}
+
+func (o *countingObserver) Inc(name string) { o.counts[name]++ }
+
+func (o *countingObserver) Alert(key, text string) { o.alerts = append(o.alerts, key+"|"+text) }
+
+func (o *countingObserver) CountAndAlert(key string, threshold int, _ time.Duration, text func(int) string) {
+	o.window[key]++
+	if o.window[key] >= threshold {
+		o.Alert(key, text(o.window[key]))
+	}
+}
+
+func TestDispatcherReportsToObserver(t *testing.T) {
+	observer := &countingObserver{counts: map[string]int{}, window: map[string]int{}}
+	repo := &fakeRepo{due: map[Kind][]Notice{KindReminder: {
+		notice(KindReminder, "ok", 1), notice(KindReminder, "blocked", 2),
+		notice(KindReminder, "f1", 3), notice(KindReminder, "f2", 4), notice(KindReminder, "f3", 5),
+	}}}
+	wl := &fakeWaitlist{offers: []Offer{offer("offer", 6)}}
+	bot := &fakeBot{errs: map[int64]error{
+		2: &telegram.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"},
+		3: errors.New("network"), 4: errors.New("network"), 5: errors.New("network: last"),
+	}}
+	newTestDispatcher(repo, bot).WithWaitlist(wl, 15*time.Minute, "").WithObserver(observer).RunOnce(context.Background())
+
+	if observer.counts["tg_sent"] != 2 || observer.counts["waitlist_offers"] != 1 || observer.counts["tg_blocked"] != 1 || observer.counts["tg_failed"] != 3 {
+		t.Fatalf("counts = %v", observer.counts)
+	}
+	if len(observer.alerts) != 1 || !strings.Contains(observer.alerts[0], "Рассылка в Telegram сбоит: 3 ошибок") || !strings.Contains(observer.alerts[0], "network: last") {
+		t.Fatalf("alerts = %v", observer.alerts)
+	}
+}

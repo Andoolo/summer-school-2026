@@ -63,6 +63,8 @@ type RouterOptions struct {
 	// нагрузочных прогонах k6 все запросы с одного адреса не упираются в лимит.
 	// Лимиты кодов по номеру телефона от этого не зависят — они в сервисах.
 	RateLimit *RateLimitOptions
+	// Observer — счётчики запросов и алерты о всплесках ошибок. nil — выключено.
+	Observer Observer
 }
 
 func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
@@ -76,7 +78,11 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 
 	router := chi.NewRouter()
 	router.Use(requestIDMiddleware)
-	router.Use(recoverMiddleware(logger))
+	if opts.Observer != nil {
+		// Снаружи recover: паника превращается в 500, и этот ответ тоже посчитается.
+		router.Use(observeMiddleware(opts.Observer))
+	}
+	router.Use(recoverObservedMiddleware(logger, opts.Observer))
 	router.Use(accessLogMiddleware(logger))
 	switch {
 	case opts.Dev:

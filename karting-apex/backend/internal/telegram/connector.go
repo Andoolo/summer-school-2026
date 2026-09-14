@@ -23,6 +23,16 @@ type Connector struct {
 	secret     string
 	logger     *slog.Logger
 	username   atomic.Pointer[string]
+	adminChat  int64
+}
+
+// AdminCommands — меню администратора: общее плюс сводка.
+var AdminCommands = append(append([]BotCommand{}, Commands...), BotCommand{Command: "stats", Description: "Сводка по сервису"})
+
+// WithAdminChat показывает администратору в меню команду /stats.
+func (c *Connector) WithAdminChat(chatID int64) *Connector {
+	c.adminChat = chatID
+	return c
 }
 
 // NewConnector: publicURL — внешний адрес сервиса (на Render — RENDER_EXTERNAL_URL).
@@ -88,6 +98,11 @@ func (c *Connector) connect(ctx context.Context) error {
 	// Меню команд — удобство, а не условие работы: ошибку только пишем в журнал.
 	if err := c.client.SetMyCommands(callCtx, Commands); err != nil {
 		c.logger.Warn("telegram set bot commands failed", "error", err)
+	}
+	if c.adminChat != 0 {
+		if err := c.client.SetChatCommands(callCtx, c.adminChat, AdminCommands); err != nil {
+			c.logger.Warn("telegram set admin commands failed", "error", err)
+		}
 	}
 	return nil
 }
