@@ -3,6 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2315151E'/%3E%3Ccircle cx='32' cy='32' r='11' fill='%23E10600'/%3E%3C/svg%3E">
+    <!-- Предзагрузка wasm: сборка (webApp/build.gradle.kts) подставляет сюда <link rel="preload">
+         на оба .wasm. Без неё скачивание ~4,7 МБ начиналось только после загрузки и разбора
+         volna-web.js — на медленном мобильном это лишние полторы секунды. -->
+    <!-- wasm-preload -->
+    <script>
+        // Адрес API нужен до загрузки приложения: по нему будим бэкенд (см. ниже).
+        // Локальная разработка (localhost/127.0.0.1) — пусто, клиент падает на
+        // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8090).
+        window.__API_BASE_URL__ =
+            (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+                ? ""
+                : "https://summer-school-2026.onrender.com";
+
+        // Бесплатный Render усыпляет бэкенд без запросов; первый запрос будит его ~15 секунд.
+        // Приложение обращается к API только после загрузки wasm — через 5–30 секунд, — и
+        // спящий бэкенд добавлял эти 15 секунд сверху. Будим его в первую же миллисекунду,
+        // пока качается wasm. no-cors: ответ не нужен, важен сам запрос.
+        if (window.__API_BASE_URL__) {
+            try {
+                fetch(window.__API_BASE_URL__ + "/healthz", { mode: "no-cors", credentials: "omit", cache: "no-store" })
+                    .catch(function () {});
+            } catch (e) {}
+        }
+    </script>
     <script>
         // Тема нужна прелоадеру раньше, чем загрузится приложение: иначе тот, кто выбрал
         // тёмную тему, секунду смотрел бы на белый экран. Ключ и значения — те же, что
@@ -272,14 +297,6 @@
 </div>
 
 <script>
-    // Локальная разработка (localhost/127.0.0.1) — оставляем пусто, клиент падает на
-    // VolnaApiClient.DEFAULT_BASE_URL (http://localhost:8090).
-    // Продакшн-деплой — публичный URL задеплоенного бэкенда «Апекс» на Render.
-    window.__API_BASE_URL__ =
-        (location.hostname === "localhost" || location.hostname === "127.0.0.1")
-            ? ""
-            : "https://summer-school-2026.onrender.com";
-
     (function () {
         var overlay = document.getElementById("loading-overlay");
         var box = document.querySelector(".loader-box");
@@ -377,7 +394,7 @@
         setTimeout(markReady, 20000);
     })();
 </script>
-<script src="skiko.js"></script>
+<!-- skiko.js не подключается: в сборке его нет (запрос отдавал 404), Skiko грузится из volna-web.js. -->
 <script src="volna-web.js"></script>
 </body>
 </html>
