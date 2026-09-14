@@ -154,7 +154,7 @@ private fun DrawScope.drawStartFinishLine(from: Offset, to: Offset) {
  * Контур в плоских aspect-корректных координатах (x = lng·cos(lat), y = lat) плюс его bbox.
  * Считается один раз по списку точек и не зависит от размера Canvas.
  */
-private class PreparedMinimap(
+internal class PreparedMinimap(
     val points: List<Offset>,
     val minX: Float,
     val minY: Float,
@@ -162,7 +162,7 @@ private class PreparedMinimap(
     val maxY: Float,
 )
 
-private fun prepareMinimap(points: List<GeoPoint>): PreparedMinimap? {
+internal fun prepareMinimap(points: List<GeoPoint>): PreparedMinimap? {
     if (points.size < 2) return null
 
     val midLatRad = (points.sumOf { it.lat } / points.size) * (PI / 180.0)
@@ -179,7 +179,7 @@ private fun prepareMinimap(points: List<GeoPoint>): PreparedMinimap? {
 }
 
 /** Единый масштаб по обеим осям (форма не искажается) + центрирование; север — вверху. */
-private fun PreparedMinimap.toCanvas(width: Float, height: Float, padding: Float): List<Offset> {
+internal fun PreparedMinimap.toCanvas(width: Float, height: Float, padding: Float): List<Offset> {
     val epsilon = 1e-6f
     val spanX = (maxX - minX).takeIf { it > epsilon } ?: epsilon
     val spanY = (maxY - minY).takeIf { it > epsilon } ?: epsilon

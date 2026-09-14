@@ -69,7 +69,12 @@ class SlotDetailsStore(
 
         storeScope.launch {
             mutableState.update { it.copy(slot = Loadable.Loading, showRouteMap = false, leaderboard = emptyList()) }
-            slotRepository.getSlot(slotId).fold(
+            val result = slotRepository.getSlot(slotId)
+            // Пока шёл запрос, человек мог открыть другой заезд. На медленной сети ответы
+            // приходят в любом порядке, и поздний ответ по старому заезду подменил бы
+            // открытый сейчас.
+            if (lastSlotId != slotId) return@launch
+            result.fold(
                 onSuccess = { slot ->
                     mutableState.update { it.copy(slot = Loadable.Content(slot)) }
                     loadLeaderboard(slot)
@@ -90,7 +95,10 @@ class SlotDetailsStore(
     // Рекорды трассы — вспомогательная секция: ошибку не показываем, просто оставляем пусто.
     private fun loadLeaderboard(slot: Slot) {
         storeScope.launch {
-            slotRepository.leaderboard(slot.route.id).fold(
+            val result = slotRepository.leaderboard(slot.route.id)
+            // Та же гонка: рекорды трассы прошлого заезда не должны оказаться на экране нового.
+            if (lastSlotId != slot.id) return@launch
+            result.fold(
                 onSuccess = { entries -> mutableState.update { it.copy(leaderboard = entries) } },
                 onFailure = { failure -> AppLogger.e(failure, "Failed to load leaderboard") },
             )

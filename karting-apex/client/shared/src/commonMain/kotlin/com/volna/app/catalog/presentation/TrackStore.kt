@@ -65,7 +65,11 @@ class TrackStore(
 
         storeScope.launch {
             mutableState.update { it.copy(passport = Loadable.Loading, leaderboard = emptyList()) }
-            slotRepository.trackPassport(routeId).fold(
+            val result = slotRepository.trackPassport(routeId)
+            // Пока шёл запрос, могли открыть другую трассу: поздний ответ по прошлой не
+            // должен подменить открытую сейчас (на медленной сети порядок ответов любой).
+            if (lastRouteId != routeId) return@launch
+            result.fold(
                 onSuccess = { passport ->
                     mutableState.update { it.copy(passport = Loadable.Content(passport)) }
                     loadLeaderboard(routeId)
@@ -85,7 +89,9 @@ class TrackStore(
 
     private fun loadLeaderboard(routeId: RouteId) {
         storeScope.launch {
-            slotRepository.leaderboard(routeId).fold(
+            val result = slotRepository.leaderboard(routeId)
+            if (lastRouteId != routeId) return@launch
+            result.fold(
                 onSuccess = { entries -> mutableState.update { it.copy(leaderboard = entries) } },
                 onFailure = { failure -> AppLogger.e(failure, "Failed to load track leaderboard") },
             )

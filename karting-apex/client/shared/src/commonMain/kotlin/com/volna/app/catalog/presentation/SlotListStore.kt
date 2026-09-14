@@ -73,6 +73,9 @@ class SlotListStore(
     private val instructorRepository: InstructorRepository,
     scope: CoroutineScope? = null,
     private val now: () -> Instant = { Clock.System.now() },
+    // Пресеты дат считаются от «сегодня» в поясе пользователя; снаружи — чтобы границы
+    // дня и недели можно было проверить тестами на конкретных датах.
+    private val zone: () -> TimeZone = { TimeZone.currentSystemDefault() },
 ) : ViewModel(), MviStore<SlotListState, SlotListIntent, SlotListEffect> {
     private val mutableState = MutableStateFlow(SlotListState())
     private val effects = Channel<SlotListEffect>(Channel.BUFFERED)
@@ -169,9 +172,8 @@ class SlotListStore(
     }
 
     private fun selectDatePreset(preset: SlotDatePreset) {
-        val now = Clock.System.now()
-        val zone = TimeZone.currentSystemDefault()
-        val today = now.toLocalDateTime(zone).date
+        val zone = zone()
+        val today = now().toLocalDateTime(zone).date
         val todayStart = today.atStartOfDayIn(zone)
         val filters = when (preset) {
             SlotDatePreset.Any -> SlotFilters()

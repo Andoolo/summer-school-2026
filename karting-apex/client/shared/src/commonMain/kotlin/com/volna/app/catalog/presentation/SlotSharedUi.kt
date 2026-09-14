@@ -246,8 +246,8 @@ internal fun RouteType.toDetailsAudienceText(): String = when (this) {
     RouteType.Experienced -> "для опытных райдеров"
 }
 
-internal fun kotlinx.datetime.Instant.toSlotCardStartText(): String {
-    val dateTime = toLocalDateTime(TimeZone.currentSystemDefault())
+internal fun kotlinx.datetime.Instant.toSlotCardStartText(zone: TimeZone = TimeZone.currentSystemDefault()): String {
+    val dateTime = toLocalDateTime(zone)
     val weekday = when (dateTime.dayOfWeek) {
         DayOfWeek.MONDAY -> "Пн"
         DayOfWeek.TUESDAY -> "Вт"
