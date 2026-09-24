@@ -1,0 +1,246 @@
+# Домен waitlist — лист ожидания на заполненные заезды.
+#
+# Встать в очередь можно, если мест меньше, чем нужно. Когда места освобождаются, первому в
+# очереди, кому хватает мест, бот присылает предложение в Telegram; на запись 15 минут, потом
+# место предлагается следующему. Место не закрепляется: записаться может любой.
+# Встать в очередь можно только с привязанным Telegram и включёнными уведомлениями.
+#
+# Контракт проверяется тестом бэкенда: karting-apex/backend/internal/http/handlers/
+# waitlist_contract_test.go сверяет с этим файлом запросы и ответы реальных хэндлеров.
+
+paths:
+
+  /slots/{slotId}/waitlist:
+    parameters:
+      - $ref: '#/components/parameters/SlotIdPath'
+
+    get:
+      tags: [waitlist]
+      operationId: getWaitlistStatus
+      summary: Лист ожидания заезда для текущего клиента
+      description: |
+        Стоит ли клиент в очереди на заезд и может ли встать: для записи в очередь нужны
+        привязанный Telegram и включённые уведомления.
+      responses:
+        '200':
+          description: Статус листа ожидания.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistStatus'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../common/models.yaml#/components/responses/NotFound'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+
+    post:
+      tags: [waitlist]
+      operationId: joinWaitlist
+      summary: Встать в очередь
+      description: |
+        Повторный вызов не создаёт дубля: возвращает существующую запись с кодом 200.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [seats_count]
+              properties:
+                seats_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                  description: Сколько мест нужно.
+      responses:
+        '201':
+          description: Клиент встал в очередь.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistEntry'
+        '200':
+          description: Клиент уже в очереди — возвращается его запись.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistEntry'
+        '400':
+          description: Неверное число мест или тело запроса (code bad_request).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '403':
+          description: |
+            Уведомить о месте нечем: telegram_required — клиент не входил через Telegram;
+            notifications_disabled — уведомления выключены командой /stop.
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '404':
+          $ref: '../common/models.yaml#/components/responses/NotFound'
+        '409':
+          description: |
+            seats_available — места уже есть, можно записаться сразу; double_booking — клиент уже
+            записан на заезд; slot_cancelled — заезд отменён; waitlist_limit — клиент уже стоит в
+            пяти очередях.
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '422':
+          description: Заезд уже начался (code slot_started).
+          content:
+            application/json:
+              schema:
+                $ref: '../common/models.yaml#/components/schemas/Error'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+
+    delete:
+      tags: [waitlist]
+      operationId: leaveWaitlist
+      summary: Выйти из очереди
+      description: Идемпотентно — клиент не в очереди, ответ тот же.
+      responses:
+        '204':
+          description: Клиента нет в очереди на заезд.
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../common/models.yaml#/components/responses/NotFound'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+
+  /waitlist:
+    get:
+      tags: [waitlist]
+      operationId: listMyWaitlist
+      summary: Мои очереди
+      description: |
+        Очереди клиента на заезды, которые ещё не начались и не отменены, по времени старта.
+        Раздел «Мои очереди» в профиле.
+      responses:
+        '200':
+          description: Очереди клиента (может быть пусто).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MyWaitlistEntry'
+        '401':
+          $ref: '../common/models.yaml#/components/responses/Unauthorized'
+        '429':
+          $ref: '../common/models.yaml#/components/responses/RateLimited'
+
+components:
+
+  parameters:
+
+    SlotIdPath:
+      name: slotId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    WaitlistEntryStatus:
+      type: string
+      enum: [waiting, notified]
+      description: |
+        waiting — клиент в очереди; notified — место освободилось, клиенту отправлено
+        предложение (срок — offer_expires_at). Закрытые записи (записался, вышел, истекло)
+        клиенту не отдаются.
+
+    WaitlistEntry:
+      type: object
+      additionalProperties: false
+      required: [id, status, seats_count, position, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/WaitlistEntryStatus'
+        seats_count:
+          type: integer
+          minimum: 1
+          maximum: 3
+        position:
+          type: integer
+          minimum: 0
+          description: Место в очереди с 1; у получивших предложение — 0.
+        created_at:
+          type: string
+          format: date-time
+        offer_expires_at:
+          type: string
+          format: date-time
+          description: До какого момента действует предложение. Только при status = notified.
+
+    WaitlistStatus:
+      type: object
+      additionalProperties: false
+      required: [entry, telegram_linked, notifications_enabled]
+      properties:
+        entry:
+          description: Запись клиента в очереди; null — клиент не в очереди.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/WaitlistEntry'
+        telegram_linked:
+          type: boolean
+          description: Клиент входил через Telegram — есть куда прислать предложение.
+        notifications_enabled:
+          type: boolean
+          description: Уведомления не выключены командой /stop.
+
+    MyWaitlistEntry:
+      type: object
+      additionalProperties: false
+      required: [id, status, seats_count, position, created_at, slot_id, route_name, start_at]
+      description: Запись в очереди вместе с заездом, к которому она относится.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/WaitlistEntryStatus'
+        seats_count:
+          type: integer
+          minimum: 1
+          maximum: 3
+        position:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        offer_expires_at:
+          type: string
+          format: date-time
+        slot_id:
+          type: string
+          format: uuid
+        route_name:
+          type: string
+          description: Название конфигурации трассы.
+        start_at:
+          type: string
+          format: date-time

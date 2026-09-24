@@ -37,6 +37,8 @@ tags:
     description: Создание, список, отмена броней
   - name: marshals
     description: Справочник маршалов для фильтра (read-only)
+  - name: waitlist
+    description: Лист ожидания на заполненные заезды и раздел «Мои очереди»
 
 paths:
   # auth
@@ -70,6 +72,12 @@ paths:
   # marshals
   /marshals:
     $ref: './marshals/api.yaml#/paths/~1marshals'
+
+  # waitlist
+  /slots/{slotId}/waitlist:
+    $ref: './waitlist/api.yaml#/paths/~1slots~1{slotId}~1waitlist'
+  /waitlist:
+    $ref: './waitlist/api.yaml#/paths/~1waitlist'
 
 
 components:

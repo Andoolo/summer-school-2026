@@ -88,7 +88,7 @@ components:
           $ref: '#/components/schemas/TrackConfigBrief'
         marshal:
           allOf:
-            - $ref: '../marshals/models.yaml#/components/schemas/Marshal'
+            - $ref: '../marshals/api.yaml#/components/schemas/Marshal'
           nullable: true
           description: Может быть null, если маршал ещё не назначен.
         free_seats: { type: integer, format: int32, minimum: 0 }
