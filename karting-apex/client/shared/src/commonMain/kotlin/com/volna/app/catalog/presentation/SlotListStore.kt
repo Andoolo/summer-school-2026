@@ -2,10 +2,14 @@ package com.volna.app.catalog.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.volna.app.catalog.DisabledWaitlistRepository
 import com.volna.app.catalog.PageRequest
 import com.volna.app.catalog.InstructorRepository
 import com.volna.app.catalog.SlotFilters
 import com.volna.app.catalog.SlotRepository
+import com.volna.app.catalog.WaitlistEntry
+import com.volna.app.catalog.WaitlistRepository
+import com.volna.app.core.error.ApiErrorCode
 import com.volna.app.core.error.AppFailure
 import com.volna.app.core.error.asAppFailure
 import com.volna.app.core.logging.AppLogger
@@ -16,6 +20,7 @@ import com.volna.app.domain.model.Instructor
 import com.volna.app.domain.model.InstructorId
 import com.volna.app.domain.model.RouteType
 import com.volna.app.domain.model.Slot
+import com.volna.app.domain.model.SlotId
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
@@ -24,6 +29,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +45,16 @@ data class SlotListState(
     val draftDatePreset: SlotDatePreset = SlotDatePreset.Any,
     val instructors: Loadable<List<Instructor>> = Loadable.Initial,
     val filtersVisible: Boolean = false,
+    val waitlist: CatalogWaitlist = CatalogWaitlist(),
+)
+
+/**
+ * Лист ожидания в каталоге. [available] — включён ли он на сервере (без бота его нет, и
+ * подпись «есть лист ожидания» была бы неправдой); [mine] — очереди человека по заездам.
+ */
+data class CatalogWaitlist(
+    val available: Boolean = true,
+    val mine: Map<SlotId, WaitlistEntry> = emptyMap(),
 )
 
 enum class SlotDatePreset {
@@ -76,8 +92,10 @@ class SlotListStore(
     // Пресеты дат считаются от «сегодня» в поясе пользователя; снаружи — чтобы границы
     // дня и недели можно было проверить тестами на конкретных датах.
     private val zone: () -> TimeZone = { TimeZone.currentSystemDefault() },
+    private val waitlistRepository: WaitlistRepository = DisabledWaitlistRepository,
 ) : ViewModel(), MviStore<SlotListState, SlotListIntent, SlotListEffect> {
     private val mutableState = MutableStateFlow(SlotListState())
+    private var waitlistJob: Job? = null
     private val effects = Channel<SlotListEffect>(Channel.BUFFERED)
     private val storeScope = scope ?: viewModelScope
 
@@ -100,7 +118,11 @@ class SlotListStore(
             SlotListIntent.ToggleOnlyAvailable -> mutableState.update {
                 it.copy(draftFilters = it.draftFilters.copy(onlyAvailable = !it.draftFilters.onlyAvailable))
             }
-            SlotListIntent.Reset -> mutableState.value = SlotListState()
+            SlotListIntent.Reset -> {
+                // Очереди — чужие для следующего входа: поздний ответ не должен их вернуть.
+                waitlistJob?.cancel()
+                mutableState.value = SlotListState()
+            }
         }
     }
 
@@ -109,6 +131,7 @@ class SlotListStore(
     private fun load() {
         if (mutableState.value.slots == Loadable.Loading) return
 
+        loadWaitlist()
         storeScope.launch {
             val filters = mutableState.value.filters
             mutableState.update { it.copy(slots = Loadable.Loading) }
@@ -142,6 +165,28 @@ class SlotListStore(
                         effects.send(SlotListEffect.SignedOut)
                     } else {
                         mutableState.update { it.copy(slots = Loadable.Error(appFailure)) }
+                    }
+                },
+            )
+        }
+    }
+
+    // Вспомогательная часть каталога: не загрузилась — карточки остаются с общей подписью.
+    private fun loadWaitlist() {
+        waitlistJob?.cancel()
+        waitlistJob = storeScope.launch {
+            waitlistRepository.mine().fold(
+                onSuccess = { entries ->
+                    mutableState.update {
+                        it.copy(waitlist = CatalogWaitlist(available = true, mine = entries.associate { e -> e.slotId to e.entry }))
+                    }
+                },
+                onFailure = { failure ->
+                    val appFailure = failure.asAppFailure()
+                    if (appFailure is AppFailure.Api && appFailure.code == ApiErrorCode.NotFound) {
+                        mutableState.update { it.copy(waitlist = CatalogWaitlist(available = false)) }
+                    } else if (appFailure != AppFailure.Unauthorized) {
+                        AppLogger.e(failure, "Failed to load my waitlist entries for catalog")
                     }
                 },
             )

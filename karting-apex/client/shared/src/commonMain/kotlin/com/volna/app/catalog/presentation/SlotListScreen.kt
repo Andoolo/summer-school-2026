@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.volna.app.catalog.WaitlistEntry
+import com.volna.app.catalog.WaitlistEntryStatus
 import com.volna.app.core.theme.VolnaTheme
 import com.volna.app.core.ui.Loadable
 import com.volna.app.core.ui.webSelectionLabel
@@ -59,7 +61,7 @@ fun SlotListScreen(
             when (val slots = state.slots) {
                 Loadable.Initial -> SlotInitialLoader()
                 Loadable.Loading -> SlotLoadingSkeleton()
-                is Loadable.Content -> SlotCards(slots.value, onSlotClick)
+                is Loadable.Content -> SlotCards(slots.value, state.waitlist, onSlotClick)
                 is Loadable.Empty -> if (slots.reason == com.volna.app.core.ui.EmptyReason.NoSlotsByFilters) {
                     StateMessage(
                         title = "Нет слотов по условиям",
@@ -404,6 +406,7 @@ private fun SlotLoadingSkeleton() {
 @Composable
 private fun SlotCards(
     slots: List<Slot>,
+    waitlist: CatalogWaitlist,
     onSlotClick: (Slot) -> Unit,
 ) {
     LazyColumn(
@@ -416,7 +419,7 @@ private fun SlotCards(
         verticalArrangement = Arrangement.spacedBy(VolnaTheme.tokens.spacing.sm),
     ) {
         items(slots, key = { it.id.value }) { slot ->
-            SlotCard(slot, onSlotClick)
+            SlotCard(slot, seatsLabel(slot.freeSeats > 0, waitlist.mine[slot.id], waitlist.available), onSlotClick)
         }
     }
 }
@@ -424,6 +427,7 @@ private fun SlotCards(
 @Composable
 private fun SlotCard(
     slot: Slot,
+    seatsLabel: String,
     onSlotClick: (Slot) -> Unit,
 ) {
     val hasSeats = slot.freeSeats > 0
@@ -493,7 +497,7 @@ private fun SlotCard(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
             Text(
-                text = if (hasSeats) "Свободно мест" else "Мест нет · есть лист ожидания",
+                text = seatsLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -513,4 +517,17 @@ private fun SlotPreviewPhoto() {
         height = 120.dp,
         shape = RoundedCornerShape(VolnaTheme.tokens.radius.lg),
     )
+}
+
+/**
+ * Подпись о местах на карточке каталога. Своя очередь важнее общей подписи: человек видит,
+ * где он уже стоит, не открывая заезд.
+ */
+internal fun seatsLabel(hasSeats: Boolean, queueEntry: WaitlistEntry?, waitlistAvailable: Boolean): String = when {
+    queueEntry?.status == WaitlistEntryStatus.Offered && hasSeats -> "Вам предложено место"
+    hasSeats -> "Свободно мест"
+    queueEntry != null && queueEntry.position > 0 -> "Мест нет · ${queueEntry.position}-й в очереди"
+    queueEntry != null -> "Мест нет · вы в очереди"
+    waitlistAvailable -> "Мест нет · есть лист ожидания"
+    else -> "Мест нет"
 }

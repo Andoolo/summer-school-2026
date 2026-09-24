@@ -78,7 +78,7 @@ val volnaAppModule = module {
 
     viewModel { AuthStore(get(), get()) }
     viewModel { ProfileStore(get(), get()) }
-    viewModel { SlotListStore(get(), get()) }
+    viewModel { SlotListStore(get(), get(), waitlistRepository = get()) }
     viewModel { SlotDetailsStore(get(), waitlistRepository = get()) }
     viewModel { MyWaitlistStore(get()) }
     viewModel { TrackStore(get()) }
