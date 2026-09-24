@@ -27,6 +27,14 @@ export const options = {
     // 409 (мест нет, уже записан, места появились) — ожидаемые ответы, не ошибки.
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<1000'],
+    // По эндпоинтам — чтобы сводка показывала время каждого запроса отдельно
+    // (у запросов метка name, см. auth()).
+    'http_req_duration{name:waitlist_join}': ['p(95)<1000'],
+    'http_req_duration{name:waitlist_status}': ['p(95)<1000'],
+    'http_req_duration{name:waitlist_leave}': ['p(95)<1000'],
+    'http_req_duration{name:book}': ['p(95)<1000'],
+    'http_req_duration{name:cancel}': ['p(95)<1000'],
+    'http_req_duration{name:list_bookings}': ['p(95)<1000'],
     checks: ['rate>0.99'],
   },
 };
@@ -65,7 +73,7 @@ function holder(vu) {
   const own = activeBooking(token, slotID);
   if (own) {
     sleep(1 + Math.random() * 3);
-    const res = http.post(`${baseURL}/bookings/${own}/cancel`, null, auth(token));
+    const res = http.post(`${baseURL}/bookings/${own}/cancel`, null, auth(token, 'cancel'));
     check(res, { 'holder cancel: 200 or already cancelled': (r) => [200, 409].includes(r.status) });
     if (res.status === 200) holderCancels.add(1);
     sleep(Math.random() * 2);
@@ -80,7 +88,7 @@ function holder(vu) {
 function waiter(vu) {
   const token = `vu-token-${vu + 76}`;
   const slotID = slots[vu % slots.length];
-  const statusRes = http.get(`${baseURL}/slots/${slotID}/waitlist`, auth(token));
+  const statusRes = http.get(`${baseURL}/slots/${slotID}/waitlist`, auth(token, 'waitlist_status'));
   check(statusRes, { 'waitlist status 200': (r) => r.status === 200 });
   if (statusRes.status !== 200) {
     sleep(1);
@@ -89,7 +97,7 @@ function waiter(vu) {
   const entry = statusRes.json('entry');
 
   if (!entry) {
-    const res = http.post(`${baseURL}/slots/${slotID}/waitlist`, JSON.stringify({ seats_count: 1 }), auth(token));
+    const res = http.post(`${baseURL}/slots/${slotID}/waitlist`, JSON.stringify({ seats_count: 1 }), auth(token, 'waitlist_join'));
     check(res, { 'join: documented status': (r) => [200, 201, 409].includes(r.status) });
     if (res.status === 201) joined.add(1);
     if (res.status === 409) {
@@ -120,7 +128,7 @@ function waiter(vu) {
     // 409 double_booking — уже записан по этому предложению: запись в очереди закроется
     // при следующем проходе рассыльщика, повторно не считаем.
   } else if (Math.random() < 0.05) {
-    const res = http.del(`${baseURL}/slots/${slotID}/waitlist`, null, auth(token));
+    const res = http.del(`${baseURL}/slots/${slotID}/waitlist`, null, auth(token, 'waitlist_leave'));
     check(res, { 'leave: 204': (r) => r.status === 204 });
     left.add(1);
   }
@@ -131,12 +139,12 @@ function maybeCancel(token, slotID, probability) {
   if (Math.random() >= probability) return;
   const own = activeBooking(token, slotID);
   if (!own) return;
-  const res = http.post(`${baseURL}/bookings/${own}/cancel`, null, auth(token));
+  const res = http.post(`${baseURL}/bookings/${own}/cancel`, null, auth(token, 'cancel'));
   check(res, { 'waiter cancel: 200 or already cancelled': (r) => [200, 409].includes(r.status) });
 }
 
 function activeBooking(token, slotID) {
-  const res = http.get(`${baseURL}/bookings?status=active&limit=50`, auth(token));
+  const res = http.get(`${baseURL}/bookings?status=active&limit=50`, auth(token, 'list_bookings'));
   check(res, { 'list bookings 200': (r) => r.status === 200 });
   if (res.status !== 200) return null;
   const found = (res.json('items') || []).find((b) => b.slot_id === slotID);
@@ -147,12 +155,16 @@ function book(token, slotID) {
   return http.post(
     `${baseURL}/bookings`,
     JSON.stringify({ slot_id: slotID, seats_count: 1, rental_count: 0 }),
-    { headers: { ...auth(token).headers, 'Idempotency-Key': uuid() } },
+    { headers: { ...auth(token).headers, 'Idempotency-Key': uuid() }, tags: { name: 'book' } },
   );
 }
 
-function auth(token) {
-  return { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
+// name — метка запроса вместо URL с id: метрики собираются по эндпоинтам.
+function auth(token, name) {
+  return {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    tags: name ? { name } : {},
+  };
 }
 
 function uuid() {
