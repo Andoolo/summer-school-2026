@@ -120,12 +120,10 @@ func durationText(d time.Duration) string {
 	minutes := int(d / time.Minute)
 	switch {
 	case minutes < 60:
-		return itoa(minutes) + " мин"
+		return strconv.Itoa(minutes) + " мин"
 	case minutes < 24*60:
-		return itoa(minutes/60) + " ч " + itoa(minutes%60) + " мин"
+		return strconv.Itoa(minutes/60) + " ч " + strconv.Itoa(minutes%60) + " мин"
 	default:
-		return itoa(minutes/(24*60)) + " дн " + itoa(minutes/60%24) + " ч"
+		return strconv.Itoa(minutes/(24*60)) + " дн " + strconv.Itoa(minutes/60%24) + " ч"
 	}
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }

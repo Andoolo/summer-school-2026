@@ -73,7 +73,7 @@ func press(data string) telegram.CallbackQuery {
 }
 
 func newService(repo *fakeRepo, bot *fakeBot, changes *int) *Service {
-	s := NewService(repo, bot, func() { *changes++ }, nil)
+	s := NewService(repo, repo, bot, func() { *changes++ }, nil)
 	s.now = func() time.Time { return now }
 	return s
 }

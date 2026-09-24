@@ -146,7 +146,7 @@ func main() {
 			recorder.Inc(ops.BotCancellations)
 			dispatcher.Wake()
 		}
-		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), botClient, onBotCancel, logger)
+		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), postgres.NewBookingRepository(db), botClient, onBotCancel, logger)
 		// Вебхук у бота один: вход, кнопки под уведомлениями и команды разбирает роутер.
 		botRouter := botrouter.New(botrouter.Config{
 			Login:         loginService,

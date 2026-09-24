@@ -3,6 +3,7 @@ package ops
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -140,7 +141,7 @@ func TestAlertCooldownPerKey(t *testing.T) {
 func TestCountAndAlertThresholdWindow(t *testing.T) {
 	bot := &recordingBot{}
 	r, clock := newTestRecorder(&memoryStore{}, bot, 42)
-	text := func(n int) string { return "ошибок: " + itoa(n) }
+	text := func(n int) string { return "ошибок: " + strconv.Itoa(n) }
 
 	r.CountAndAlert("http_5xx", 3, 5*time.Minute, text)
 	r.CountAndAlert("http_5xx", 3, 5*time.Minute, text)

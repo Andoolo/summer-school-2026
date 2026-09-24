@@ -34,7 +34,8 @@ func TestBotActionsFindOnlyOwnBookings(t *testing.T) {
 		t.Fatalf("BookingForChat(other chat) = %v, %v; want not found", ok, err)
 	}
 
-	cancelled, err := repo.Cancel(ctx, found.ClientID, bookingID, now)
+	// Отмена из бота — та же, что в приложении.
+	cancelled, err := postgres.NewBookingRepository(db).Cancel(ctx, found.ClientID, bookingID, now)
 	if err != nil || cancelled.Status != "cancelled" {
 		t.Fatalf("Cancel() = %+v, %v", cancelled, err)
 	}

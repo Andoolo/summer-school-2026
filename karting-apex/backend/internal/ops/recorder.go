@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -235,5 +236,5 @@ func truncate(text string, limit int) string {
 }
 
 func minutesText(d time.Duration) string {
-	return itoa(int(d/time.Minute)) + " мин"
+	return strconv.Itoa(int(d/time.Minute)) + " мин"
 }

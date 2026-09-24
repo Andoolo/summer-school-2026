@@ -49,9 +49,13 @@ type Booking struct {
 	StartAt  time.Time
 }
 
-type Repository interface {
-	// BookingForChat ищет бронь среди броней клиента, к которому привязан чат.
+// Finder ищет бронь среди броней клиента, к которому привязан чат.
+type Finder interface {
 	BookingForChat(ctx context.Context, bookingID string, chatID int64) (Booking, bool, error)
+}
+
+// Canceller — отмена брони, та же, что в приложении (booking.Repository).
+type Canceller interface {
 	Cancel(ctx context.Context, clientID, bookingID string, now time.Time) (booking.Booking, error)
 }
 
@@ -61,22 +65,23 @@ type Bot interface {
 }
 
 type Service struct {
-	repo     Repository
-	bot      Bot
-	logger   *slog.Logger
-	now      func() time.Time
-	onChange func()
+	finder    Finder
+	canceller Canceller
+	bot       Bot
+	logger    *slog.Logger
+	now       func() time.Time
+	onChange  func()
 }
 
 // NewService: onChange — сигнал рассыльщику после отмены (сообщение об отмене и лист ожидания).
-func NewService(repo Repository, bot Bot, onChange func(), logger *slog.Logger) *Service {
+func NewService(finder Finder, canceller Canceller, bot Bot, onChange func(), logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	if onChange == nil {
 		onChange = func() {}
 	}
-	return &Service{repo: repo, bot: bot, logger: logger, now: time.Now, onChange: onChange}
+	return &Service{finder: finder, canceller: canceller, bot: bot, logger: logger, now: time.Now, onChange: onChange}
 }
 
 const (
@@ -101,7 +106,7 @@ func (s *Service) HandleCallback(ctx context.Context, q telegram.CallbackQuery) 
 	}
 	chatID, messageID := q.Message.Chat.ID, q.Message.MessageID
 
-	found, exists, err := s.repo.BookingForChat(ctx, bookingID, chatID)
+	found, exists, err := s.finder.BookingForChat(ctx, bookingID, chatID)
 	if err != nil {
 		s.answer(ctx, q, textCancelFailed)
 		return err
@@ -133,7 +138,7 @@ func (s *Service) HandleCallback(ctx context.Context, q telegram.CallbackQuery) 
 		s.edit(ctx, chatID, messageID, CancelKeyboard(bookingID))
 		s.answer(ctx, q, textKept)
 	case actionConfirm:
-		_, err := s.repo.Cancel(ctx, found.ClientID, bookingID, now)
+		_, err := s.canceller.Cancel(ctx, found.ClientID, bookingID, now)
 		switch {
 		case err == nil:
 			s.logger.Info("booking cancelled from telegram", "booking_id", bookingID)

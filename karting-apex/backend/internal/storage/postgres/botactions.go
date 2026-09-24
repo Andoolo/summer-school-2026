@@ -4,23 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/botactions"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// BotActionsRepository — брони для действий из бота. Отмена — та же, что в приложении.
+// BotActionsRepository ищет брони для действий из бота. Отменяет — BookingRepository, как в
+// приложении.
 type BotActionsRepository struct {
-	db       *pgxpool.Pool
-	bookings *BookingRepository
+	db *pgxpool.Pool
 }
 
 func NewBotActionsRepository(db *pgxpool.Pool) *BotActionsRepository {
-	return &BotActionsRepository{db: db, bookings: NewBookingRepository(db)}
+	return &BotActionsRepository{db: db}
 }
 
 func (r *BotActionsRepository) BookingForChat(ctx context.Context, bookingID string, chatID int64) (botactions.Booking, bool, error) {
@@ -40,8 +38,4 @@ WHERE b.id = $1
 		return botactions.Booking{}, false, fmt.Errorf("query booking for telegram chat: %w", err)
 	}
 	return found, true, nil
-}
-
-func (r *BotActionsRepository) Cancel(ctx context.Context, clientID, bookingID string, now time.Time) (booking.Booking, error) {
-	return r.bookings.Cancel(ctx, clientID, bookingID, now)
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"summer-school-2026/backend/internal/domain"
 	"summer-school-2026/backend/internal/ops"
 )
 
@@ -92,7 +93,7 @@ func OfferText(o Offer, ttl time.Duration, appURL string) string {
 	writeRace(&b, Notice{RouteName: o.RouteName, StartAt: o.StartAt, MeetingPoint: o.MeetingPoint, InstructorName: o.InstructorName})
 	b.WriteString("🎟 Свободно мест: " + strconv.Itoa(o.FreeSeats) + ", вы ждали: " + strconv.Itoa(o.SeatsWanted) + "\n\n")
 	minutes := int(ttl / time.Minute)
-	b.WriteString("Запишитесь в течение " + strconv.Itoa(minutes) + " минут — до " + o.ExpiresAt.In(moscow).Format("15:04") +
+	b.WriteString("Запишитесь в течение " + strconv.Itoa(minutes) + " минут — до " + o.ExpiresAt.In(domain.ClubZone).Format("15:04") +
 		" (мск). Потом предложим место следующему в очереди.\n")
 	b.WriteString("Место не закреплено: пока вы не записались, его может занять другой.\n")
 	if link := SlotLink(appURL, o.SlotID); link != "" {

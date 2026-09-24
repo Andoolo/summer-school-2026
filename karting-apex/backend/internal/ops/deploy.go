@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"summer-school-2026/backend/internal/domain"
 )
 
 type StateStore interface {
@@ -11,8 +13,6 @@ type StateStore interface {
 	State(ctx context.Context, key string) (string, error)
 	SetState(ctx context.Context, key, value string) error
 }
-
-var moscow = time.FixedZone("MSK", 3*60*60)
 
 // AnnounceVersion сообщает администратору о новой версии — один раз на версию. На каждое
 // пробуждение Render не сообщает: сервис просыпается по многу раз в день.
@@ -31,7 +31,7 @@ func AnnounceVersion(ctx context.Context, store StateStore, recorder *Recorder, 
 	if previous == version {
 		return nil
 	}
-	text := "🚀 Апекс обновлён: версия " + shortVersion(version) + ", запущен в " + now.In(moscow).Format("15:04") + " (мск)."
+	text := "🚀 Апекс обновлён: версия " + shortVersion(version) + ", запущен в " + now.In(domain.ClubZone).Format("15:04") + " (мск)."
 	if previous != "" {
 		text += "\nПредыдущая версия: " + shortVersion(previous) + "."
 	}

@@ -6,13 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"summer-school-2026/backend/internal/domain"
 	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/botactions"
 )
-
-// Трассы в Москве; перехода на летнее время там нет, поэтому хватает фиксированного
-// смещения — и образ не зависит от наличия tzdata.
-var moscow = time.FixedZone("MSK", 3*60*60)
 
 var (
 	weekdays = [...]string{"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"}
@@ -77,7 +74,7 @@ func writeRace(b *strings.Builder, n Notice) {
 
 // FormatStart — «суббота, 20 сентября, 18:30 (мск)».
 func FormatStart(t time.Time) string {
-	local := t.In(moscow)
+	local := t.In(domain.ClubZone)
 	return fmt.Sprintf("%s, %d %s, %02d:%02d (мск)", weekdays[local.Weekday()], local.Day(), months[local.Month()-1], local.Hour(), local.Minute())
 }
 
