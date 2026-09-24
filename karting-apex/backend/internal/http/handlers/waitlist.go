@@ -47,6 +47,7 @@ type waitlistStatusDTO struct {
 	Entry                *waitlistEntryDTO `json:"entry"`
 	TelegramLinked       bool              `json:"telegram_linked"`
 	NotificationsEnabled bool              `json:"notifications_enabled"`
+	OfferMinutes         int               `json:"offer_minutes"`
 }
 
 type myWaitlistEntryDTO struct {
@@ -94,7 +95,11 @@ func (h *WaitlistHandler) Status(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, err)
 		return
 	}
-	dto := waitlistStatusDTO{TelegramLinked: status.TelegramLinked, NotificationsEnabled: status.NotificationsEnabled}
+	dto := waitlistStatusDTO{
+		TelegramLinked:       status.TelegramLinked,
+		NotificationsEnabled: status.NotificationsEnabled,
+		OfferMinutes:         status.OfferMinutes,
+	}
 	if status.Entry != nil {
 		dto.Entry = entryDTO(*status.Entry)
 	}

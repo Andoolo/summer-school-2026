@@ -8,8 +8,8 @@ import kotlinx.datetime.Instant
 
 /**
  * Лист ожидания на заполненный заезд. Когда место освобождается, первому в очереди
- * приходит сообщение в Telegram; на запись у него [OfferMinutes] минут, потом место
- * предлагается следующему. Место при этом не закреплено — записаться может любой.
+ * приходит сообщение в Telegram; на запись у него [WaitlistStatus.offerMinutes] минут, потом
+ * место предлагается следующему. Место при этом не закреплено — записаться может любой.
  */
 enum class WaitlistEntryStatus {
     /** Стоит в очереди. */
@@ -39,6 +39,8 @@ data class WaitlistStatus(
     val entry: WaitlistEntry?,
     val telegramLinked: Boolean,
     val notificationsEnabled: Boolean,
+    /** Минут на запись по предложению — с сервера; null — сервер не сообщил (старая версия). */
+    val offerMinutes: Int?,
 )
 
 interface WaitlistRepository {
@@ -49,8 +51,6 @@ interface WaitlistRepository {
     /** Очереди текущего человека на заезды, которые ещё не начались, по времени старта. */
     suspend fun mine(): Result<List<MyWaitlistEntry>>
 }
-
-const val OfferMinutes = 15
 
 /** Лист ожидания выключен (например, в тестах, где он не нужен): секция не показывается. */
 object DisabledWaitlistRepository : WaitlistRepository {

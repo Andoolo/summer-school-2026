@@ -58,6 +58,7 @@ internal data class WaitlistStatusDto(
     val entry: WaitlistEntryDto? = null,
     @SerialName("telegram_linked") val telegramLinked: Boolean = false,
     @SerialName("notifications_enabled") val notificationsEnabled: Boolean = false,
+    @SerialName("offer_minutes") val offerMinutes: Int? = null,
 )
 
 internal fun WaitlistEntryDto.toDomain() = WaitlistEntry(
@@ -71,6 +72,7 @@ internal fun WaitlistStatusDto.toDomain() = WaitlistStatus(
     entry = entry?.toDomain(),
     telegramLinked = telegramLinked,
     notificationsEnabled = notificationsEnabled,
+    offerMinutes = offerMinutes,
 )
 
 @Serializable

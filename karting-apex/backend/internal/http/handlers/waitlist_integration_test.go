@@ -86,13 +86,15 @@ func TestWaitlistEndpoints(t *testing.T) {
 		} `json:"entry"`
 		TelegramLinked       bool `json:"telegram_linked"`
 		NotificationsEnabled bool `json:"notifications_enabled"`
+		OfferMinutes         int  `json:"offer_minutes"`
 	}
 	recorder := call(http.MethodGet, "waitlist-token", "")
 	expectCode(recorder, http.StatusOK, "")
 	if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil {
 		t.Fatal(err)
 	}
-	if status.Entry == nil || status.Entry.Status != "waiting" || status.Entry.Position != 1 || status.Entry.SeatsCount != 2 || !status.TelegramLinked || !status.NotificationsEnabled {
+	if status.Entry == nil || status.Entry.Status != "waiting" || status.Entry.Position != 1 || status.Entry.SeatsCount != 2 || !status.TelegramLinked || !status.NotificationsEnabled ||
+		status.OfferMinutes != int(waitlist.OfferTTL/time.Minute) {
 		t.Fatalf("status = %s", recorder.Body.String())
 	}
 

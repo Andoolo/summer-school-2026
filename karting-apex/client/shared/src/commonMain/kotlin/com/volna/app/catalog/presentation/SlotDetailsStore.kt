@@ -141,7 +141,15 @@ class SlotDetailsStore(
             if (lastSlotId != slotId) return@launch
             result.fold(
                 onSuccess = { status -> mutableState.update { it.copy(waitlist = it.waitlist.copy(status = status)) } },
-                onFailure = { failure -> AppLogger.e(failure, "Failed to load waitlist status") },
+                onFailure = { failure ->
+                    AppLogger.e(failure, "Failed to load waitlist status")
+                    // Сам заезд виден и без входа, а лист ожидания — нет. Истёкшую сессию не
+                    // прячем молча (карточка просто пропала бы): ведём на вход, после него —
+                    // обратно на этот заезд.
+                    if (failure.asAppFailure() == AppFailure.Unauthorized) {
+                        effects.send(SlotDetailsEffect.SignedOut)
+                    }
+                },
             )
         }
     }

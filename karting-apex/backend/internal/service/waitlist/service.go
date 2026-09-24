@@ -83,6 +83,9 @@ type Status struct {
 	Entry                *Entry
 	TelegramLinked       bool
 	NotificationsEnabled bool
+	// OfferMinutes — сколько минут на запись по предложению: приложение показывает это
+	// заранее, до предложения.
+	OfferMinutes int
 }
 
 type Repository interface {
@@ -121,7 +124,11 @@ func (s *Service) Status(ctx context.Context, token, slotID string) (Status, err
 	if err != nil {
 		return Status{}, err
 	}
-	status := Status{TelegramLinked: client.TelegramLinked, NotificationsEnabled: client.NotificationsEnabled}
+	status := Status{
+		TelegramLinked:       client.TelegramLinked,
+		NotificationsEnabled: client.NotificationsEnabled,
+		OfferMinutes:         int(OfferTTL / time.Minute),
+	}
 	entry, found, err := s.repo.ActiveEntry(ctx, client.ID, slotID)
 	if err != nil {
 		return Status{}, err

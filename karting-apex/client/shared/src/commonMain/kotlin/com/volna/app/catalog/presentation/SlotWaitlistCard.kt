@@ -21,7 +21,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import com.volna.app.catalog.OfferMinutes
 import com.volna.app.catalog.WaitlistEntry
 import com.volna.app.catalog.WaitlistEntryStatus
 import com.volna.app.core.theme.VolnaTheme
@@ -63,9 +62,16 @@ internal fun SlotWaitlistCard(
                 maxSeats = maxSeats,
                 inProgress = waitlist.inProgress,
                 hint = joinBlockedHint(status.telegramLinked, status.notificationsEnabled),
+                offerMinutes = status.offerMinutes,
                 onIntent = onIntent,
             )
-            else -> EntryContent(entry = entry, inProgress = waitlist.inProgress, zone = zone, onIntent = onIntent)
+            else -> EntryContent(
+                entry = entry,
+                inProgress = waitlist.inProgress,
+                offerMinutes = status.offerMinutes,
+                zone = zone,
+                onIntent = onIntent,
+            )
         }
         waitlist.message?.let { message ->
             Text(
@@ -85,12 +91,13 @@ private fun JoinContent(
     maxSeats: Int,
     inProgress: Boolean,
     hint: String?,
+    offerMinutes: Int?,
     onIntent: (SlotDetailsIntent) -> Unit,
 ) {
     Title("Лист ожидания")
     Text(
         text = hint ?: ("Мест нет. Встаньте в очередь — когда место освободится, " +
-            "пришлём сообщение в Telegram. На запись будет $OfferMinutes минут."),
+            "пришлём сообщение в Telegram. ${offerWindowText(offerMinutes)}"),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -125,6 +132,7 @@ private fun JoinContent(
 private fun EntryContent(
     entry: WaitlistEntry,
     inProgress: Boolean,
+    offerMinutes: Int?,
     zone: TimeZone,
     onIntent: (SlotDetailsIntent) -> Unit,
 ) {
@@ -146,7 +154,7 @@ private fun EntryContent(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "Когда место освободится, пришлём сообщение в Telegram. На запись будет $OfferMinutes минут.",
+                text = "Когда место освободится, пришлём сообщение в Telegram. ${offerWindowText(offerMinutes)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -179,6 +187,22 @@ internal fun joinBlockedHint(telegramLinked: Boolean, notificationsEnabled: Bool
     !notificationsEnabled -> "Мест нет. Уведомления в Telegram отключены — отправьте боту /notify, " +
         "и сможете встать в очередь."
     else -> null
+}
+
+/** «На запись будет 15 минут.»; без числа с сервера — без числа, а не с устаревшей константой. */
+internal fun offerWindowText(minutes: Int?): String =
+    if (minutes == null) "Время на запись будет ограничено." else "На запись будет $minutes ${minutesWord(minutes)}."
+
+/** 1 минута, 2 минуты, 5 минут, 21 минута. */
+internal fun minutesWord(n: Int): String {
+    val lastTwo = n % 100
+    val last = n % 10
+    return when {
+        lastTwo in 11..14 -> "минут"
+        last == 1 -> "минута"
+        last in 2..4 -> "минуты"
+        else -> "минут"
+    }
 }
 
 internal fun waitingText(position: Int, seats: Int): String {

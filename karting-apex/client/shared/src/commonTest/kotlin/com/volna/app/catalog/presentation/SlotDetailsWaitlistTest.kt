@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
 /** Лист ожидания на экране заезда: загрузка статуса, вход в очередь, выход и ошибки. */
 class SlotDetailsWaitlistTest {
     private val fullSlot = slot("slot-full", "route-a", "Городское кольцо").copy(freeSeats = 0)
-    private val linked = WaitlistStatus(entry = null, telegramLinked = true, notificationsEnabled = true)
+    private val linked = WaitlistStatus(entry = null, telegramLinked = true, notificationsEnabled = true, offerMinutes = 15)
     private val waiting = WaitlistEntry(WaitlistEntryStatus.Waiting, seatsCount = 2, position = 3, offerExpiresAt = null)
 
     @Test
@@ -98,6 +98,16 @@ class SlotDetailsWaitlistTest {
     }
 
     @Test
+    fun expiredSessionOnWaitlistStatusSignsOut() = runTest {
+        // Заезд публичный и грузится без входа; истёкшую сессию выдаёт только лист ожидания.
+        val waitlist = FakeWaitlistRepository(Result.failure(AppFailureException(AppFailure.Unauthorized)))
+        val store = SlotDetailsStore(ImmediateSlotRepository(fullSlot), backgroundScope, waitlist)
+        store.accept(SlotDetailsIntent.Load(fullSlot.id))
+        runCurrent()
+        assertEquals(SlotDetailsEffect.SignedOut, store.effects())
+    }
+
+    @Test
     fun disabledWaitlistHidesSection() = runTest {
         val store = SlotDetailsStore(ImmediateSlotRepository(fullSlot), backgroundScope)
         store.accept(SlotDetailsIntent.Load(fullSlot.id))
@@ -115,8 +125,12 @@ class SlotDetailsWaitlistTest {
             entry = WaitlistEntryDto(status = "notified", seatsCount = 1, position = 0, offerExpiresAt = Instant.parse("2026-09-23T09:15:00Z")),
             telegramLinked = true,
             notificationsEnabled = true,
+            offerMinutes = 15,
         )
         val status = dto.toDomain()
+        assertEquals(15, status.offerMinutes)
+        // Старый сервер без offer_minutes: числа нет, а не устаревшая константа.
+        assertNull(WaitlistStatusDto().toDomain().offerMinutes)
         assertEquals(WaitlistEntryStatus.Offered, status.entry?.status)
         assertNotNull(status.entry?.offerExpiresAt)
         assertEquals(WaitlistEntryStatus.Waiting, WaitlistEntryDto("waiting", 2, 1).toDomain().status)
@@ -131,6 +145,12 @@ class SlotDetailsWaitlistTest {
         assertTrue(joinBlockedHint(telegramLinked = false, notificationsEnabled = true)!!.contains("войдите через Telegram"))
         assertTrue(joinBlockedHint(telegramLinked = true, notificationsEnabled = false)!!.contains("/notify"))
         assertNull(joinBlockedHint(telegramLinked = true, notificationsEnabled = true))
+        assertEquals("На запись будет 15 минут.", offerWindowText(15))
+        assertEquals("На запись будет 1 минута.", offerWindowText(1))
+        assertEquals("На запись будет 3 минуты.", offerWindowText(3))
+        assertEquals("На запись будет 11 минут.", offerWindowText(11))
+        assertEquals("На запись будет 21 минута.", offerWindowText(21))
+        assertEquals("Время на запись будет ограничено.", offerWindowText(null))
     }
 
     private class ImmediateSlotRepository(private val slot: Slot) : SlotRepository {

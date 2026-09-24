@@ -197,7 +197,7 @@ components:
     WaitlistStatus:
       type: object
       additionalProperties: false
-      required: [entry, telegram_linked, notifications_enabled]
+      required: [entry, telegram_linked, notifications_enabled, offer_minutes]
       properties:
         entry:
           description: Запись клиента в очереди; null — клиент не в очереди.
@@ -210,6 +210,12 @@ components:
         notifications_enabled:
           type: boolean
           description: Уведомления не выключены командой /stop.
+        offer_minutes:
+          type: integer
+          minimum: 1
+          description: |
+            Сколько минут на запись по предложению. Приложение показывает это ещё до
+            предложения («На запись будет 15 минут») — единственный источник этого числа.
 
     MyWaitlistEntry:
       type: object

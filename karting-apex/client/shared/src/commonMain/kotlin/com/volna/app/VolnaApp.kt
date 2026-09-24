@@ -95,6 +95,11 @@ fun VolnaApp() {
             bookingListStore.accept(BookingListIntent.Reset)
             bookingDetailsStore.accept(BookingDetailsIntent.Reset)
             trackStore.accept(TrackIntent.Reset)
+            // Сессия истекла, пока человек смотрел заезд (например, открытый по ссылке из бота):
+            // после повторного входа вернём его туда же. Брони не запоминаем — войти может уже
+            // другой человек, а бронь личная.
+            pendingDeepLink = navController.currentBackStackEntry?.deepLink()
+                ?.takeUnless { it.target is BookingDetailsDestination }
             rootState = RootState.Ready
             navController.navigate(AuthDestination) {
                 popUpTo(navController.graph.findStartDestination().id) {
