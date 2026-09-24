@@ -16,7 +16,6 @@ import (
 type memoryRepo struct {
 	requests map[string]*memoryRequest // ключ — pollHash
 	chats    map[string]int64          // номер → привязанный чат
-	notify   map[int64]bool            // чат → уведомления включены
 }
 
 type memoryRequest struct {
@@ -27,7 +26,7 @@ type memoryRequest struct {
 }
 
 func newMemoryRepo() *memoryRepo {
-	return &memoryRepo{requests: map[string]*memoryRequest{}, chats: map[string]int64{}, notify: map[int64]bool{}}
+	return &memoryRepo{requests: map[string]*memoryRequest{}, chats: map[string]int64{}}
 }
 
 func (r *memoryRepo) LinkChat(_ context.Context, phone string, chatID int64) error {
@@ -37,20 +36,7 @@ func (r *memoryRepo) LinkChat(_ context.Context, phone string, chatID int64) err
 		}
 	}
 	r.chats[phone] = chatID
-	if _, ok := r.notify[chatID]; !ok {
-		r.notify[chatID] = true
-	}
 	return nil
-}
-
-func (r *memoryRepo) SetNotifications(_ context.Context, chatID int64, enabled bool) (bool, error) {
-	for _, chat := range r.chats {
-		if chat == chatID {
-			r.notify[chatID] = enabled
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (r *memoryRepo) CreateLoginRequest(_ context.Context, startHash, pollHash, code string, now, expiresAt time.Time) error {
@@ -147,6 +133,13 @@ func newFixture() *fixture {
 	return f
 }
 
+// handle — сообщение, как его передаёт роутер бота. Не относящееся ко входу оставляем
+// без ответа: справку показывает роутер.
+func (f *fixture) handle(ctx context.Context, update telegram.Update) error {
+	_, err := f.service.HandleMessage(ctx, update.Message)
+	return err
+}
+
 func startParam(t *testing.T, deepLink string) string {
 	t.Helper()
 	parsed, err := url.Parse(deepLink)
@@ -186,7 +179,7 @@ func TestFullLoginFlow(t *testing.T) {
 		t.Fatalf("status before /start = %s, want pending", poll.Status)
 	}
 
-	if err := f.service.HandleUpdate(ctx, privateMessage(777, "/start "+param, nil)); err != nil {
+	if err := f.handle(ctx, privateMessage(777, "/start "+param, nil)); err != nil {
 		t.Fatalf("HandleUpdate(/start) error = %v", err)
 	}
 	reply := f.bot.last(t)
@@ -199,7 +192,7 @@ func TestFullLoginFlow(t *testing.T) {
 	}
 
 	contact := &telegram.Contact{PhoneNumber: "79991234567", FirstName: "Анна", UserID: 777}
-	if err := f.service.HandleUpdate(ctx, privateMessage(777, "", contact)); err != nil {
+	if err := f.handle(ctx, privateMessage(777, "", contact)); err != nil {
 		t.Fatalf("HandleUpdate(contact) error = %v", err)
 	}
 	if !strings.Contains(f.bot.last(t).text, "Готово") {
@@ -224,14 +217,14 @@ func TestForeignContactIsRejected(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()
 	started, _ := f.service.Start(ctx)
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+	_ = f.handle(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
 
 	// Пересланный чужой контакт: user_id не совпадает с отправителем.
 	foreign := &telegram.Contact{PhoneNumber: "79990000001", FirstName: "Чужой", UserID: 999}
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "", foreign))
+	_ = f.handle(ctx, privateMessage(777, "", foreign))
 	// Контакт без user_id (записан вручную) — тоже не подтверждённый номер.
 	manual := &telegram.Contact{PhoneNumber: "79990000002", FirstName: "Вручную"}
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "", manual))
+	_ = f.handle(ctx, privateMessage(777, "", manual))
 
 	if poll, _ := f.service.Poll(ctx, started.PollToken); poll.Status != StatusPending {
 		t.Fatalf("status = %s, want pending: foreign contact must not confirm", poll.Status)
@@ -247,7 +240,7 @@ func TestContactWithoutStartDoesNothing(t *testing.T) {
 	started, _ := f.service.Start(ctx)
 
 	// Человек не открывал ссылку этого запроса — его номер не должен подтвердить чужой запрос.
-	_ = f.service.HandleUpdate(ctx, privateMessage(555, "", &telegram.Contact{PhoneNumber: "79991112233", UserID: 555}))
+	_ = f.handle(ctx, privateMessage(555, "", &telegram.Contact{PhoneNumber: "79991112233", UserID: 555}))
 	if poll, _ := f.service.Poll(ctx, started.PollToken); poll.Status != StatusPending {
 		t.Fatalf("status = %s, want pending", poll.Status)
 	}
@@ -259,8 +252,8 @@ func TestLinkCannotBeReusedByAnotherChat(t *testing.T) {
 	started, _ := f.service.Start(ctx)
 	param := startParam(t, started.DeepLink)
 
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+param, nil))
-	_ = f.service.HandleUpdate(ctx, privateMessage(888, "/start "+param, nil))
+	_ = f.handle(ctx, privateMessage(777, "/start "+param, nil))
+	_ = f.handle(ctx, privateMessage(888, "/start "+param, nil))
 	if !strings.Contains(f.bot.last(t).text, "устарела") {
 		t.Fatalf("second chat must be refused, got %q", f.bot.last(t).text)
 	}
@@ -272,7 +265,7 @@ func TestExpiredRequest(t *testing.T) {
 	started, _ := f.service.Start(ctx)
 	f.now = f.now.Add(11 * time.Minute)
 
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+	_ = f.handle(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
 	if !strings.Contains(f.bot.last(t).text, "устарела") {
 		t.Fatalf("expired link reply = %q", f.bot.last(t).text)
 	}
@@ -281,29 +274,25 @@ func TestExpiredRequest(t *testing.T) {
 	}
 }
 
-func TestIgnoresGroupsBotsAndGarbage(t *testing.T) {
+func TestNotLoginMessagesAreLeftToRouter(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()
-	group := privateMessage(1, "/start abc", nil)
+	group := privateMessage(1, "/start abcdefghijklmnopqrstuv", nil)
 	group.Message.Chat.Type = "group"
-	bot := privateMessage(2, "/start abc", nil)
+	bot := privateMessage(2, "/start abcdefghijklmnopqrstuv", nil)
 	bot.Message.From.IsBot = true
-	for _, update := range []telegram.Update{group, bot, {}} {
-		if err := f.service.HandleUpdate(ctx, update); err != nil {
-			t.Fatalf("HandleUpdate() error = %v", err)
+	contactInGroup := privateMessage(3, "", &telegram.Contact{PhoneNumber: "79991234567", UserID: 3})
+	contactInGroup.Message.Chat.Type = "group"
+	updates := []telegram.Update{group, bot, contactInGroup, {}, privateMessage(3, "/start", nil),
+		privateMessage(3, "/start ../../etc", nil), privateMessage(3, "привет", nil), privateMessage(3, "/stop", nil)}
+	for _, update := range updates {
+		handled, err := f.service.HandleMessage(ctx, update.Message)
+		if err != nil || handled {
+			t.Fatalf("HandleMessage(%+v) = %v, %v; want not handled", update.Message, handled, err)
 		}
 	}
 	if len(f.bot.sent) != 0 {
-		t.Fatalf("bot must stay silent in groups and for bots, sent %d", len(f.bot.sent))
-	}
-
-	_ = f.service.HandleUpdate(ctx, privateMessage(3, "/start", nil))
-	_ = f.service.HandleUpdate(ctx, privateMessage(3, "/start ../../etc", nil))
-	_ = f.service.HandleUpdate(ctx, privateMessage(3, "привет", nil))
-	for _, msg := range f.bot.sent {
-		if !strings.Contains(msg.text, "бот приложения «Апекс»") {
-			t.Fatalf("unexpected reply %q", msg.text)
-		}
+		t.Fatalf("login must stay silent for non-login messages, sent %d", len(f.bot.sent))
 	}
 }
 
@@ -352,11 +341,11 @@ func TestCodeTypedIntoBotGetsHint(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()
 	started, _ := f.service.Start(ctx)
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+	_ = f.handle(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
 
 	// Латиница, кириллица и пробелы по краям — всё это код, набранный вручную.
 	for _, typed := range []string{started.ConfirmCode, "T73X", " nt4p ", "Т73Х"} {
-		_ = f.service.HandleUpdate(ctx, privateMessage(777, typed, nil))
+		_ = f.handle(ctx, privateMessage(777, typed, nil))
 		if reply := f.bot.last(t); !strings.Contains(reply.text, "вводить не нужно") {
 			t.Fatalf("reply to %q = %q, want code hint", typed, reply.text)
 		}
@@ -366,10 +355,10 @@ func TestCodeTypedIntoBotGetsHint(t *testing.T) {
 		t.Fatalf("status = %s, want pending: typed code must not confirm", poll.Status)
 	}
 
+	// Остальной текст — не про вход: его разбирает роутер бота.
 	for _, other := range []string{"привет", "12345", "ok", "как войти?"} {
-		_ = f.service.HandleUpdate(ctx, privateMessage(777, other, nil))
-		if reply := f.bot.last(t); !strings.Contains(reply.text, "бот приложения «Апекс»") {
-			t.Fatalf("reply to %q = %q, want general help", other, reply.text)
+		if handled, _ := f.service.HandleMessage(ctx, privateMessage(777, other, nil).Message); handled {
+			t.Fatalf("%q must be left to the router", other)
 		}
 	}
 }
@@ -378,8 +367,8 @@ func TestLoginLinksChatForNotifications(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()
 	started, _ := f.service.Start(ctx)
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "", &telegram.Contact{PhoneNumber: "79991234567", UserID: 777}))
+	_ = f.handle(ctx, privateMessage(777, "/start "+startParam(t, started.DeepLink), nil))
+	_ = f.handle(ctx, privateMessage(777, "", &telegram.Contact{PhoneNumber: "79991234567", UserID: 777}))
 	if !strings.Contains(f.bot.last(t).text, "/stop") {
 		t.Fatalf("done message must mention notifications, got %q", f.bot.last(t).text)
 	}
@@ -393,93 +382,5 @@ func TestLoginLinksChatForNotifications(t *testing.T) {
 	}
 	if f.repo.chats["+79991234567"] != 777 {
 		t.Fatalf("chats = %v, want +79991234567 → 777", f.repo.chats)
-	}
-}
-
-func TestStopAndNotifyCommands(t *testing.T) {
-	f := newFixture()
-	ctx := context.Background()
-
-	// Чат, не связанный с аккаунтом, получает объяснение.
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stop", nil))
-	if !strings.Contains(f.bot.last(t).text, "не связан") {
-		t.Fatalf("unlinked /stop reply = %q", f.bot.last(t).text)
-	}
-
-	_ = f.repo.LinkChat(ctx, "+79991234567", 777)
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stop", nil))
-	if f.repo.notify[777] || !strings.Contains(f.bot.last(t).text, "отключены") {
-		t.Fatalf("after /stop notify=%v reply=%q", f.repo.notify[777], f.bot.last(t).text)
-	}
-	// Команда из меню приходит с именем бота.
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/notify@apex_login_bot", nil))
-	if !f.repo.notify[777] || !strings.Contains(f.bot.last(t).text, "включены") {
-		t.Fatalf("after /notify notify=%v reply=%q", f.repo.notify[777], f.bot.last(t).text)
-	}
-	// Похожий текст — не команда.
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stopall", nil))
-	if !f.repo.notify[777] {
-		t.Fatal("/stopall must not disable notifications")
-	}
-}
-
-func TestCallbacksArePassedToHandler(t *testing.T) {
-	f := newFixture()
-	ctx := context.Background()
-	press := telegram.Update{CallbackQuery: &telegram.CallbackQuery{ID: "cb", Data: "cancel:x"}}
-
-	// Без обработчика нажатие просто игнорируется.
-	if err := f.service.HandleUpdate(ctx, press); err != nil || len(f.bot.sent) != 0 {
-		t.Fatalf("HandleUpdate(callback) without handler = %v, sent %d", err, len(f.bot.sent))
-	}
-
-	var got []string
-	f.service.WithCallbacks(func(_ context.Context, q telegram.CallbackQuery) error {
-		got = append(got, q.Data)
-		return nil
-	})
-	if err := f.service.HandleUpdate(ctx, press); err != nil || len(got) != 1 || got[0] != "cancel:x" {
-		t.Fatalf("callback handler got %v, err %v", got, err)
-	}
-	if len(f.bot.sent) != 0 {
-		t.Fatal("callback must not trigger login messages")
-	}
-}
-
-func TestAdminCommands(t *testing.T) {
-	f := newFixture()
-	ctx := context.Background()
-
-	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/whoami", nil))
-	if f.bot.last(t).text != "Ваш Telegram chat id: 555" {
-		t.Fatalf("/whoami reply = %q", f.bot.last(t).text)
-	}
-
-	// Администратор не задан — /stats как неизвестная команда.
-	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil))
-	if !strings.Contains(f.bot.last(t).text, "бот приложения «Апекс»") {
-		t.Fatalf("/stats without admin reply = %q", f.bot.last(t).text)
-	}
-
-	calls := 0
-	f.service.WithAdmin(555, func(context.Context) (string, error) {
-		calls++
-		return "📊 сводка", nil
-	})
-	_ = f.service.HandleUpdate(ctx, privateMessage(777, "/stats", nil))
-	if calls != 0 || !strings.Contains(f.bot.last(t).text, "бот приложения «Апекс»") {
-		t.Fatalf("non-admin /stats: calls=%d reply=%q", calls, f.bot.last(t).text)
-	}
-	_ = f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil))
-	if calls != 1 || f.bot.last(t).text != "📊 сводка" {
-		t.Fatalf("admin /stats: calls=%d reply=%q", calls, f.bot.last(t).text)
-	}
-
-	f.service.WithAdmin(555, func(context.Context) (string, error) { return "", errors.New("db down") })
-	if err := f.service.HandleUpdate(ctx, privateMessage(555, "/stats", nil)); err == nil {
-		t.Fatal("stats error must be returned for logging")
-	}
-	if !strings.Contains(f.bot.last(t).text, "Не удалось собрать сводку") {
-		t.Fatalf("stats failure reply = %q", f.bot.last(t).text)
 	}
 }

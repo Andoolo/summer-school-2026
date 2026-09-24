@@ -20,7 +20,6 @@ import (
 	"log/slog"
 	"math/big"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -78,9 +77,6 @@ type Repository interface {
 	// LinkChat запоминает чат за клиентом с этим номером — туда приходят уведомления о
 	// бронях. У другого клиента этот чат отвязывается.
 	LinkChat(ctx context.Context, phone string, chatID int64) error
-	// SetNotifications включает или выключает уведомления для чата; false — чат не
-	// привязан ни к одному клиенту.
-	SetNotifications(ctx context.Context, chatID int64, enabled bool) (bool, error)
 }
 
 // Sessions — выдача сессии по номеру, уже подтверждённому Telegram.
@@ -106,30 +102,12 @@ type PollResult struct {
 }
 
 type Service struct {
-	repo      Repository
-	sessions  Sessions
-	bot       Bot
-	logger    *slog.Logger
-	now       func() time.Time
-	username  func() string
-	callbacks func(context.Context, telegram.CallbackQuery) error
-	adminChat int64
-	stats     func(context.Context) (string, error)
-}
-
-// WithAdmin включает /stats для чата администратора. Остальным команда не видна: они
-// получают обычную справку.
-func (s *Service) WithAdmin(chatID int64, stats func(context.Context) (string, error)) *Service {
-	s.adminChat = chatID
-	s.stats = stats
-	return s
-}
-
-// WithCallbacks передаёт нажатия кнопок под сообщениями (например, «Отменить бронь»)
-// обработчику: вебхук у бота один на всё.
-func (s *Service) WithCallbacks(handle func(context.Context, telegram.CallbackQuery) error) *Service {
-	s.callbacks = handle
-	return s
+	repo     Repository
+	sessions Sessions
+	bot      Bot
+	logger   *slog.Logger
+	now      func() time.Time
+	username func() string
 }
 
 // NewService создаёт сервис. username возвращает имя бота или пустую строку, пока бот
@@ -207,10 +185,6 @@ func (s *Service) Poll(ctx context.Context, pollToken string) (PollResult, error
 }
 
 const (
-	textHelp = "Это бот приложения «Апекс»: вход без кода и уведомления о бронях.\n\n" +
-		"Откройте приложение и нажмите «Войти через Telegram» — бот пришлёт кнопку для входа. " +
-		"После входа сюда будут приходить подтверждения броней и напоминания о заездах.\n\n" +
-		"/stop — отключить уведомления\n/notify — включить снова"
 	textLinkExpired = "Ссылка для входа устарела или уже использована.\n\n" +
 		"Вернитесь в приложение и нажмите «Войти через Telegram» ещё раз."
 	textForeignContact = "Для входа нужен ваш собственный номер. Нажмите кнопку «Поделиться номером» ниже."
@@ -218,10 +192,6 @@ const (
 	textBadPhone       = "Не получилось войти с этим номером. Начните вход в приложении заново."
 	textDone           = "Готово! Вернитесь в приложение — вход выполнится автоматически.\n\n" +
 		"Сюда же будут приходить подтверждения броней и напоминания о заездах. Отключить: /stop"
-	textNotifyOff    = "Уведомления о бронях отключены. Включить снова: /notify"
-	textNotifyOn     = "Уведомления о бронях включены. Отключить: /stop"
-	textNotifyNoChat = "Этот чат пока не связан с аккаунтом «Апекса».\n\n" +
-		"Войдите в приложение через Telegram — и бот будет присылать уведомления о бронях."
 	textCodeNotNeeded = "Код сверки вводить не нужно — он только для того, чтобы сравнить его с кодом в приложении.\n\n" +
 		"Если вход уже начат — нажмите кнопку «Поделиться номером» внизу экрана.\n" +
 		"Если нет — вернитесь в приложение и нажмите «Войти через Telegram»."
@@ -236,71 +206,52 @@ func textConfirm(code string) string {
 		"Чтобы войти, нажмите «Поделиться номером» ниже."
 }
 
-// HandleUpdate обрабатывает сообщение из вебхука. Ошибки отправки сообщения только
-// логируются: вебхук должен ответить Telegram быстро, иначе тот начнёт повторы.
-func (s *Service) HandleUpdate(ctx context.Context, update telegram.Update) error {
-	if update.CallbackQuery != nil {
-		if s.callbacks == nil {
-			return nil
-		}
-		return s.callbacks(ctx, *update.CallbackQuery)
-	}
-	msg := update.Message
+// HandleMessage обрабатывает сообщение, если оно относится ко входу: ссылка /start с
+// токеном, контакт с номером, код сверки, набранный вручную. handled=false — сообщение не
+// про вход, его разбирает роутер бота (команды, справка).
+//
+// Ошибки отправки сообщений только логируются: вебхук должен ответить Telegram быстро.
+func (s *Service) HandleMessage(ctx context.Context, msg *telegram.Message) (bool, error) {
+	// Номер подтверждается только в личной переписке с самим человеком.
 	if msg == nil || msg.From == nil || msg.From.IsBot || msg.Chat.Type != "private" {
-		return nil
+		return false, nil
 	}
 	now := s.now().UTC()
-
 	switch {
 	case msg.Contact != nil:
-		return s.handleContact(ctx, msg, now)
+		return true, s.handleContact(ctx, msg, now)
 	case strings.HasPrefix(msg.Text, "/start"):
 		return s.handleStart(ctx, msg, now)
-	case isCommand(msg.Text, "/whoami"):
-		s.send(ctx, msg.Chat.ID, "Ваш Telegram chat id: "+strconv.FormatInt(msg.Chat.ID, 10), nil)
-		return nil
-	case isCommand(msg.Text, "/stats") && s.stats != nil && s.adminChat != 0 && msg.Chat.ID == s.adminChat:
-		text, err := s.stats(ctx)
-		if err != nil {
-			s.send(ctx, msg.Chat.ID, "Не удалось собрать сводку: база недоступна. Подробности — в журнале сервиса.", nil)
-			return err
-		}
-		s.send(ctx, msg.Chat.ID, text, nil)
-		return nil
-	case isCommand(msg.Text, "/stop"):
-		return s.handleNotifications(ctx, msg.Chat.ID, false)
-	case isCommand(msg.Text, "/notify"):
-		return s.handleNotifications(ctx, msg.Chat.ID, true)
 	case codeLikePattern.MatchString(strings.TrimSpace(msg.Text)):
 		// Люди пересылают код сверки в бота, думая, что его нужно ввести.
 		s.send(ctx, msg.Chat.ID, textCodeNotNeeded, nil)
-		return nil
+		return true, nil
 	default:
-		s.send(ctx, msg.Chat.ID, textHelp, nil)
-		return nil
+		return false, nil
 	}
 }
 
-func (s *Service) handleStart(ctx context.Context, msg *telegram.Message, now time.Time) error {
+// handleStart — ссылка из приложения. /start без токена (бота открыли сами) — не вход:
+// роутер покажет справку.
+func (s *Service) handleStart(ctx context.Context, msg *telegram.Message, now time.Time) (bool, error) {
 	param := strings.TrimSpace(strings.TrimPrefix(msg.Text, "/start"))
 	if !startPattern.MatchString(param) {
-		s.send(ctx, msg.Chat.ID, textHelp, nil)
-		return nil
+		return false, nil
 	}
 	request, ok, err := s.repo.AttachChat(ctx, auth.HashToken(param), msg.Chat.ID, now)
 	if err != nil {
-		return err
+		return true, err
 	}
 	if !ok {
 		s.send(ctx, msg.Chat.ID, textLinkExpired, telegram.RemoveKeyboard{RemoveKeyboard: true})
-		return nil
+		return true, nil
 	}
 	s.send(ctx, msg.Chat.ID, textConfirm(request.ConfirmCode), telegram.ReplyKeyboard{
 		Keyboard:        [][]telegram.KeyboardButton{{{Text: shareButtonText, RequestContact: true}}},
 		OneTimeKeyboard: true,
 		ResizeKeyboard:  true,
 	})
-	return nil
+	return true, nil
 }
 
 func (s *Service) handleContact(ctx context.Context, msg *telegram.Message, now time.Time) error {
@@ -330,28 +281,6 @@ func (s *Service) handleContact(ctx context.Context, msg *telegram.Message, now 
 	s.logger.Info("telegram login confirmed", "phone", auth.MaskPhone(phone))
 	s.send(ctx, msg.Chat.ID, textDone, telegram.RemoveKeyboard{RemoveKeyboard: true})
 	return nil
-}
-
-func (s *Service) handleNotifications(ctx context.Context, chatID int64, enabled bool) error {
-	found, err := s.repo.SetNotifications(ctx, chatID, enabled)
-	if err != nil {
-		return err
-	}
-	switch {
-	case !found:
-		s.send(ctx, chatID, textNotifyNoChat, nil)
-	case enabled:
-		s.send(ctx, chatID, textNotifyOn, nil)
-	default:
-		s.send(ctx, chatID, textNotifyOff, nil)
-	}
-	return nil
-}
-
-// isCommand — текст равен команде, в том числе в виде /stop@имя_бота из меню команд.
-func isCommand(text, command string) bool {
-	text = strings.TrimSpace(text)
-	return text == command || strings.HasPrefix(text, command+"@")
 }
 
 func (s *Service) send(ctx context.Context, chatID int64, text string, markup any) {

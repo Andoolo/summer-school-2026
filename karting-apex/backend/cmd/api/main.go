@@ -17,6 +17,7 @@ import (
 	"summer-school-2026/backend/internal/service/auth"
 	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/botactions"
+	"summer-school-2026/backend/internal/service/botrouter"
 	"summer-school-2026/backend/internal/service/notify"
 	"summer-school-2026/backend/internal/service/profile"
 	"summer-school-2026/backend/internal/service/telegramlogin"
@@ -121,8 +122,8 @@ func main() {
 		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger).WithAdminChat(cfg.AdminTelegramChatID)
 		go connector.Run(ctx)
 		telegramUsername = connector.Username
-		loginService := telegramlogin.NewService(postgres.NewTelegramLoginRepository(db), authService, botClient, connector.Username, logger).
-			WithAdmin(cfg.AdminTelegramChatID, stats.Text)
+		telegramRepo := postgres.NewTelegramLoginRepository(db)
+		loginService := telegramlogin.NewService(telegramRepo, authService, botClient, connector.Username, logger)
 
 		// Уведомления о бронях идут через того же бота. Слать можно и до подключения
 		// вебхука: отправка сообщений от него не зависит.
@@ -139,8 +140,17 @@ func main() {
 			dispatcher.Wake()
 		}
 		cancelFromBot := botactions.NewService(postgres.NewBotActionsRepository(db), botClient, onBotCancel, logger)
-		loginService.WithCallbacks(cancelFromBot.HandleCallback)
-		telegramHandler := handlers.NewTelegramHandler(loginService, webhookSecret, logger)
+		// Вебхук у бота один: вход, кнопки под уведомлениями и команды разбирает роутер.
+		botRouter := botrouter.New(botrouter.Config{
+			Login:         loginService,
+			Callbacks:     cancelFromBot,
+			Notifications: telegramRepo,
+			Bot:           botClient,
+			AdminChatID:   cfg.AdminTelegramChatID,
+			Stats:         stats.Text,
+			Logger:        logger,
+		})
+		telegramHandler := handlers.NewTelegramHandler(loginService, botRouter, webhookSecret, logger)
 		telegramStart, telegramPoll, telegramWebhook = telegramHandler.Start, telegramHandler.Poll, telegramHandler.Webhook
 		waitlistHandler := handlers.NewWaitlistHandler(waitlist.NewService(waitlistRepo, dispatcher.Wake), logger)
 		waitlistStatus, waitlistJoin, waitlistLeave, waitlistMine = waitlistHandler.Status, waitlistHandler.Join, waitlistHandler.Leave, waitlistHandler.Mine

@@ -128,6 +128,7 @@ WHERE phone = $1 AND deleted_at IS NULL`, phone, chatID); err != nil {
 	return nil
 }
 
+// SetNotifications — команды бота /stop и /notify (botrouter.NotificationSettings).
 func (r *TelegramLoginRepository) SetNotifications(ctx context.Context, chatID int64, enabled bool) (bool, error) {
 	tag, err := r.db.Exec(ctx, `
 UPDATE clients SET telegram_notifications = $2

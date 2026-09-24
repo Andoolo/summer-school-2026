@@ -12,6 +12,7 @@ import (
 	httpapi "summer-school-2026/backend/internal/http"
 	"summer-school-2026/backend/internal/http/handlers"
 	"summer-school-2026/backend/internal/service/auth"
+	"summer-school-2026/backend/internal/service/botrouter"
 	"summer-school-2026/backend/internal/service/telegramlogin"
 )
 
@@ -53,7 +54,8 @@ func (noSessions) LoginByVerifiedPhone(context.Context, string, string) (auth.Ve
 func TestTelegramWebhookRequiresSecret(t *testing.T) {
 	bot := &countingBot{}
 	service := telegramlogin.NewService(noopTelegramRepo{}, noSessions{}, bot, func() string { return "apex_login_bot" }, nil)
-	handler := handlers.NewTelegramHandler(service, "correct-secret", slog.Default())
+	updates := botrouter.New(botrouter.Config{Login: service, Notifications: noopTelegramRepo{}, Bot: bot})
+	handler := handlers.NewTelegramHandler(service, updates, "correct-secret", slog.Default())
 	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{TelegramWebhook: handler.Webhook})
 
 	update := `{"update_id":1,"message":{"message_id":1,"from":{"id":7,"first_name":"A"},"chat":{"id":7,"type":"private"},"text":"привет"}}`
@@ -86,7 +88,7 @@ func TestTelegramWebhookRequiresSecret(t *testing.T) {
 
 func TestTelegramStartUnavailableWithoutBot(t *testing.T) {
 	service := telegramlogin.NewService(noopTelegramRepo{}, noSessions{}, &countingBot{}, func() string { return "" }, nil)
-	handler := handlers.NewTelegramHandler(service, "secret", slog.Default())
+	handler := handlers.NewTelegramHandler(service, nil, "secret", slog.Default())
 	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{TelegramStart: handler.Start, TelegramPoll: handler.Poll})
 
 	rec := httptest.NewRecorder()

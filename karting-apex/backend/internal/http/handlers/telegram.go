@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -16,17 +17,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// UpdateHandler разбирает обновления бота (botrouter.Router).
+type UpdateHandler interface {
+	HandleUpdate(ctx context.Context, update telegram.Update) error
+}
+
 type TelegramHandler struct {
 	service       *telegramlogin.Service
+	updates       UpdateHandler
 	webhookSecret string
 	logger        *slog.Logger
 }
 
-func NewTelegramHandler(service *telegramlogin.Service, webhookSecret string, logger *slog.Logger) *TelegramHandler {
+// NewTelegramHandler: service — вход через Telegram (старт и опрос из приложения),
+// updates — всё, что приходит в вебхук бота.
+func NewTelegramHandler(service *telegramlogin.Service, updates UpdateHandler, webhookSecret string, logger *slog.Logger) *TelegramHandler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &TelegramHandler{service: service, webhookSecret: webhookSecret, logger: logger}
+	return &TelegramHandler{service: service, updates: updates, webhookSecret: webhookSecret, logger: logger}
 }
 
 type telegramStartResponseDTO struct {
@@ -124,7 +133,7 @@ func (h *TelegramHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	if err := h.service.HandleUpdate(r.Context(), update); err != nil {
+	if err := h.updates.HandleUpdate(r.Context(), update); err != nil {
 		h.logger.Error("telegram webhook: handle update failed", "error", err)
 	}
 	w.WriteHeader(http.StatusOK)
