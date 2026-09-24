@@ -37,6 +37,15 @@ const (
 	OfferTTL = 15 * time.Minute
 )
 
+// EntryStatus — состояние записи в очереди. Приложению отдаются только активные
+// (ждёт / место предложено); закрытые (booked, left, expired) живут в базе.
+type EntryStatus string
+
+const (
+	EntryWaiting  EntryStatus = "waiting"
+	EntryNotified EntryStatus = "notified"
+)
+
 type Client struct {
 	ID                   string
 	TelegramLinked       bool
@@ -47,7 +56,7 @@ type Entry struct {
 	ID         string
 	SlotID     string
 	SeatsCount int
-	Status     string
+	Status     EntryStatus
 	// Position — место в очереди, начиная с 1 (для предложенных — 0).
 	Position   int
 	CreatedAt  time.Time
@@ -56,7 +65,7 @@ type Entry struct {
 
 // OfferExpiresAt — до какого момента действует предложение (nil, если его нет).
 func (e Entry) OfferExpiresAt() *time.Time {
-	if e.Status != "notified" || e.NotifiedAt == nil {
+	if e.Status != EntryNotified || e.NotifiedAt == nil {
 		return nil
 	}
 	expires := e.NotifiedAt.Add(OfferTTL)

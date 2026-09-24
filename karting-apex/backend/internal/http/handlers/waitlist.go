@@ -156,7 +156,7 @@ func (h *WaitlistHandler) request(w http.ResponseWriter, r *http.Request) (strin
 func entryDTO(entry waitlist.Entry) *waitlistEntryDTO {
 	return &waitlistEntryDTO{
 		ID:             entry.ID,
-		Status:         entry.Status,
+		Status:         string(entry.Status),
 		SeatsCount:     entry.SeatsCount,
 		Position:       entry.Position,
 		CreatedAt:      entry.CreatedAt,

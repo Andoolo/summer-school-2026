@@ -243,7 +243,7 @@ func (r *BookingRepository) Cancel(ctx context.Context, clientID, bookingID stri
 		SlotID      string
 		SeatsCount  int
 		RentalCount int
-		Status      string
+		Status      booking.Status
 		StartAt     time.Time
 	}
 	err = tx.QueryRow(ctx, `
@@ -268,7 +268,7 @@ FOR UPDATE OF b, s`, bookingID).Scan(
 	if locked.OwnerID != clientID {
 		return booking.Booking{}, booking.ErrForbidden
 	}
-	if locked.Status != "active" {
+	if locked.Status != booking.StatusActive {
 		return booking.Booking{}, booking.ErrAlreadyCancelled
 	}
 
@@ -283,7 +283,7 @@ SET status = $2, cancelled_at = $3
 WHERE id = $1`, bookingID, status, now); err != nil {
 		return booking.Booking{}, fmt.Errorf("update booking cancel status: %w", err)
 	}
-	if status == "cancelled" {
+	if status == booking.StatusCancelled {
 		if _, err := tx.Exec(ctx, `
 UPDATE slots
 SET free_seats = free_seats + $2,

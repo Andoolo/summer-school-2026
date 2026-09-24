@@ -25,6 +25,16 @@ var (
 	ErrDemoBookingLimit    = errors.New("demo guest booking limit reached")
 )
 
+// Status — статус брони. Те же строки лежат в базе и уходят в API.
+type Status string
+
+const (
+	StatusActive    Status = "active"
+	StatusCancelled Status = "cancelled"
+	// StatusLateCancel — отмена меньше чем за 2 часа до старта: место не освобождается.
+	StatusLateCancel Status = "late_cancel"
+)
+
 type Client struct {
 	ID     string
 	IsDemo bool
@@ -40,7 +50,7 @@ type Booking struct {
 	ClientID    string
 	SeatsCount  int
 	RentalCount int
-	Status      string
+	Status      Status
 	PriceTotal  int
 	CreatedAt   time.Time
 	CancelledAt *time.Time
@@ -213,12 +223,12 @@ func requestHash(command CreateCommand) string {
 	return base64.RawStdEncoding.EncodeToString(sum[:])
 }
 
-func CancellationStatus(now, startAt time.Time) (string, bool) {
+func CancellationStatus(now, startAt time.Time) (Status, bool) {
 	if !now.Before(startAt) {
 		return "", false
 	}
 	if startAt.Sub(now) >= 2*time.Hour {
-		return "cancelled", true
+		return StatusCancelled, true
 	}
-	return "late_cancel", true
+	return StatusLateCancel, true
 }

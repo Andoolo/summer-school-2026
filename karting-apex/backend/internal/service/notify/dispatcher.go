@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"summer-school-2026/backend/internal/ops"
+	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/telegram"
 )
 
@@ -45,7 +46,7 @@ type Notice struct {
 	Kind           Kind
 	BookingID      string
 	ChatID         int64
-	Status         string
+	Status         booking.Status
 	SeatsCount     int
 	RentalCount    int
 	PriceTotal     int

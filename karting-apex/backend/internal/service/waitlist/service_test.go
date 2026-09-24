@@ -20,7 +20,7 @@ func (r *fakeRepo) ClientBySessionTokenHash(context.Context, string) (Client, bo
 
 func (r *fakeRepo) Join(_ context.Context, _, slotID string, seats int, now time.Time) (Entry, bool, error) {
 	r.joins++
-	return Entry{ID: "e", SlotID: slotID, SeatsCount: seats, Status: "waiting", Position: 1, CreatedAt: now}, true, nil
+	return Entry{ID: "e", SlotID: slotID, SeatsCount: seats, Status: EntryWaiting, Position: 1, CreatedAt: now}, true, nil
 }
 
 func (r *fakeRepo) Leave(context.Context, string, string, time.Time) error { return nil }
@@ -72,11 +72,11 @@ func TestJoinChecksRequestAndTelegram(t *testing.T) {
 
 func TestOfferExpiresAt(t *testing.T) {
 	notifiedAt := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
-	offered := Entry{Status: "notified", NotifiedAt: &notifiedAt}
+	offered := Entry{Status: EntryNotified, NotifiedAt: &notifiedAt}
 	if got := offered.OfferExpiresAt(); got == nil || !got.Equal(notifiedAt.Add(OfferTTL)) {
 		t.Fatalf("OfferExpiresAt() = %v", got)
 	}
-	if (Entry{Status: "waiting"}).OfferExpiresAt() != nil {
+	if (Entry{Status: EntryWaiting}).OfferExpiresAt() != nil {
 		t.Fatal("waiting entry has no offer")
 	}
 }

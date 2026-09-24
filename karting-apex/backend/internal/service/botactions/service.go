@@ -45,7 +45,7 @@ func confirmKeyboard(bookingID string) telegram.InlineKeyboard {
 // Booking — то, что нужно знать о брони для отмены из бота.
 type Booking struct {
 	ClientID string
-	Status   string
+	Status   booking.Status
 	StartAt  time.Time
 }
 
@@ -111,7 +111,7 @@ func (s *Service) HandleCallback(ctx context.Context, q telegram.CallbackQuery) 
 	case !exists:
 		s.finish(ctx, q, chatID, messageID, textNotFound)
 		return nil
-	case found.Status != "active":
+	case found.Status != booking.StatusActive:
 		s.finish(ctx, q, chatID, messageID, textAlready)
 		return nil
 	case !now.Before(found.StartAt):
@@ -122,7 +122,7 @@ func (s *Service) HandleCallback(ctx context.Context, q telegram.CallbackQuery) 
 	switch action {
 	case actionCancel:
 		s.edit(ctx, chatID, messageID, confirmKeyboard(bookingID))
-		if status, _ := booking.CancellationStatus(now, found.StartAt); status == "late_cancel" {
+		if status, _ := booking.CancellationStatus(now, found.StartAt); status == booking.StatusLateCancel {
 			// Поздняя отмена не освобождает место — это окно, которое нужно закрыть, а не
 			// исчезающая подсказка.
 			s.alert(ctx, q, textAskLate)

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"summer-school-2026/backend/internal/service/booking"
 	"summer-school-2026/backend/internal/service/botactions"
 )
 
@@ -41,7 +42,7 @@ func Text(n Notice, now time.Time) string {
 	case KindCancel:
 		b.WriteString("❌ Бронь отменена\n\n")
 		writeRace(&b, n)
-		if n.Status == "late_cancel" {
+		if n.Status == booking.StatusLateCancel {
 			b.WriteString("\nПоздняя отмена — меньше чем за 2 часа до старта: место в заезде не освободилось. Штраф не взимается.\n")
 		}
 	}
@@ -52,7 +53,7 @@ func Text(n Notice, now time.Time) string {
 // Markup — кнопки под сообщением: отменить можно из подтверждения и из напоминания.
 // Под сообщением об отмене кнопок нет (возвращается nil — поле reply_markup не передаётся).
 func Markup(n Notice) any {
-	if n.Kind == KindCancel || n.Status != "active" {
+	if n.Kind == KindCancel || n.Status != booking.StatusActive {
 		return nil
 	}
 	return botactions.CancelKeyboard(n.BookingID)

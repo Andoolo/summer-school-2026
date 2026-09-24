@@ -10,7 +10,7 @@ func TestCancellationStatusBoundaries(t *testing.T) {
 	tests := []struct {
 		name   string
 		now    time.Time
-		status string
+		status Status
 		ok     bool
 	}{
 		{name: "two hours plus one second", now: start.Add(-2*time.Hour - time.Second), status: "cancelled", ok: true},
