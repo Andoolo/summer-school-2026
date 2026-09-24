@@ -49,12 +49,20 @@ func (r *WaitlistRepository) Join(ctx context.Context, clientID, slotID string, 
 	}
 	defer tx.Rollback(ctx)
 
-	// Та же блокировка строки заезда, что при бронировании: проверка «мест нет» и
-	// постановка в очередь не разъедутся с параллельной бронью или отменой.
+	// Входы одного человека — по одному: иначе два параллельных входа в разные заезды оба
+	// насчитают очередей меньше лимита и оба встанут. Блокировка берётся первой, до строки
+	// заезда: кто ждёт её, не держит заезд и не задерживает брони.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('waitlist-join:' || $1::text, 0))`, clientID); err != nil {
+		return waitlist.Entry{}, false, fmt.Errorf("lock client for waitlist: %w", err)
+	}
+
+	// Разделяемая блокировка строки заезда: бронь и отмена меняют free_seats и ждут её
+	// снятия, поэтому проверка «мест нет» не разъедется с ними. Входы в очередь разных
+	// людей друг друга не ждут. FOR KEY SHARE не годится: с изменением free_seats он совместим.
 	var slotStatus string
 	var startAt time.Time
 	var freeSeats int
-	err = tx.QueryRow(ctx, `SELECT status, start_at, free_seats FROM slots WHERE id = $1 FOR UPDATE`, slotID).
+	err = tx.QueryRow(ctx, `SELECT status, start_at, free_seats FROM slots WHERE id = $1 FOR SHARE`, slotID).
 		Scan(&slotStatus, &startAt, &freeSeats)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return waitlist.Entry{}, false, waitlist.ErrSlotNotFound

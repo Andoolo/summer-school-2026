@@ -17,7 +17,9 @@ Copy `.env.example` to `.env` if you want shell-local defaults. Do not commit `.
 Important variables:
 
 - `HTTP_ADDR`: API listen address, default `:8080`.
-- `DATABASE_URL`: PostgreSQL connection string for app, migrations and k6 seed.
+- `DATABASE_URL`: PostgreSQL connection string for app, migrations and k6 seed. Pool size can be set
+  right in it, e.g. `...?sslmode=require&pool_max_conns=10` (default: max(4, CPU count)); migrations
+  and seed open their own connection and drop the `pool_*` parameters.
 - `TEST_DATABASE_URL`: PostgreSQL connection string for integration tests.
 - `BASE_URL`: API URL for k6, default `http://127.0.0.1:8080`.
 

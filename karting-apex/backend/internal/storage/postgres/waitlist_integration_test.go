@@ -107,6 +107,94 @@ func TestWaitlistLimitPerClient(t *testing.T) {
 	}
 }
 
+// Входы в очередь разных людей друг друга не ждут: пока один вход держит заезд
+// (разделяемо), другой проходит сразу.
+func TestWaitlistJoinsDoNotWaitForEachOther(t *testing.T) {
+	db, repo, now := prepareWaitlistDB(t)
+	ctx := context.Background()
+	anna := insertNotifyClient(t, db, "+79990021001", 801, true)
+
+	other, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Rollback(ctx)
+	if _, err := other.Exec(ctx, `SELECT 1 FROM slots WHERE id = $1 FOR SHARE`, laterSlot); err != nil {
+		t.Fatal(err)
+	}
+
+	joinCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, created, err := repo.Join(joinCtx, anna, laterSlot, 1, now); err != nil || !created {
+		t.Fatalf("Join() while another join holds the slot = %v, %v; want no waiting", created, err)
+	}
+}
+
+// Два входа одного человека в разные очереди одновременно, когда до лимита осталась одна:
+// встать должен ровно один.
+func TestWaitlistLimitHoldsForConcurrentJoins(t *testing.T) {
+	db, repo, now := prepareWaitlistDB(t)
+	ctx := context.Background()
+	anna := insertNotifyClient(t, db, "+79990022001", 901, true)
+	route, instructor := slotRefs(t, db, laterSlot)
+	for i := 0; i < waitlist.MaxActiveEntries-1; i++ {
+		slot := insertFullSlot(t, db, route, instructor, now.Add(time.Duration(i+6)*time.Hour))
+		if _, _, err := repo.Join(ctx, anna, slot, 1, now); err != nil {
+			t.Fatalf("Join #%d error = %v", i+1, err)
+		}
+	}
+	first := insertFullSlot(t, db, route, instructor, now.Add(20*time.Hour))
+	second := insertFullSlot(t, db, route, instructor, now.Add(21*time.Hour))
+
+	// Оба заезда заняты чужой бронью — оба входа ждут и стартуют одновременно.
+	booking, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer booking.Rollback(ctx)
+	if _, err := booking.Exec(ctx, `SELECT 1 FROM slots WHERE id IN ($1, $2) FOR UPDATE`, first, second); err != nil {
+		t.Fatal(err)
+	}
+
+	errs := make(chan error, 2)
+	for _, slot := range []string{first, second} {
+		go func() {
+			_, _, err := repo.Join(ctx, anna, slot, 1, now)
+			errs <- err
+		}()
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	waiting := `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`
+	for count(t, db, waiting) < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("joins did not start waiting")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := booking.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var joined, refused int
+	for range 2 {
+		switch err := <-errs; {
+		case err == nil:
+			joined++
+		case errors.Is(err, waitlist.ErrTooManyEntries):
+			refused++
+		default:
+			t.Fatalf("Join() error = %v", err)
+		}
+	}
+	if joined != 1 || refused != 1 {
+		t.Fatalf("joined=%d refused=%d, want exactly one join at the limit", joined, refused)
+	}
+	active := count(t, db, `SELECT count(*) FROM waitlist_entries WHERE client_id = $1 AND status IN ('waiting', 'notified')`, anna)
+	if active != waitlist.MaxActiveEntries {
+		t.Fatalf("active entries = %d, want %d", active, waitlist.MaxActiveEntries)
+	}
+}
+
 func TestWaitlistOffersGoInQueueOrderWithPause(t *testing.T) {
 	db, repo, now := prepareWaitlistDB(t)
 	ctx := context.Background()
