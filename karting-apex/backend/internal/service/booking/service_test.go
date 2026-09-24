@@ -9,7 +9,7 @@ import (
 
 func TestCreateRejectsInvalidCountsBeforeRepositoryLookup(t *testing.T) {
 	repo := &fakeRepo{clientFound: true}
-	service := NewService(repo)
+	service := NewService(repo, nil)
 
 	_, err := service.Create(context.Background(), CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 4, RentalCount: 0})
 	if !errors.Is(err, ErrInvalidRequest) {
@@ -21,7 +21,7 @@ func TestCreateRejectsInvalidCountsBeforeRepositoryLookup(t *testing.T) {
 }
 
 func TestCreateRejectsUnauthorizedToken(t *testing.T) {
-	service := NewService(&fakeRepo{clientFound: false})
+	service := NewService(&fakeRepo{clientFound: false}, nil)
 
 	_, err := service.Create(context.Background(), CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 1, RentalCount: 0})
 	if !errors.Is(err, ErrUnauthorized) {
@@ -30,7 +30,7 @@ func TestCreateRejectsUnauthorizedToken(t *testing.T) {
 }
 
 func TestListRejectsInvalidPagination(t *testing.T) {
-	service := NewService(&fakeRepo{clientFound: true})
+	service := NewService(&fakeRepo{clientFound: true}, nil)
 
 	_, err := service.List(context.Background(), ListCommand{Token: "token", Limit: 101, Offset: 0})
 	if !errors.Is(err, ErrInvalidRequest) {
@@ -39,7 +39,7 @@ func TestListRejectsInvalidPagination(t *testing.T) {
 }
 
 func TestGetDelegatesForbiddenFromRepository(t *testing.T) {
-	service := NewService(&fakeRepo{clientFound: true, getErr: ErrForbidden})
+	service := NewService(&fakeRepo{clientFound: true, getErr: ErrForbidden}, nil)
 
 	_, err := service.Get(context.Background(), "token", "booking-id")
 	if !errors.Is(err, ErrForbidden) {
@@ -50,7 +50,7 @@ func TestGetDelegatesForbiddenFromRepository(t *testing.T) {
 func TestOnChangeFiresOnlyAfterSuccessfulCreateAndCancel(t *testing.T) {
 	repo := &fakeRepo{clientFound: true}
 	changes := 0
-	service := NewService(repo).WithOnChange(func() { changes++ })
+	service := NewService(repo, func() { changes++ })
 	ctx := context.Background()
 
 	if _, err := service.Create(ctx, CreateCommand{Token: "token", SlotID: "slot", SeatsCount: 1}); err != nil {

@@ -31,6 +31,23 @@ const (
 	alertTextMaxRunes = 700
 )
 
+// Observer — счётчики и алерты, как их видят HTTP-слой и рассыльщик. Реализация — *Recorder,
+// выключенное наблюдение — Discard.
+type Observer interface {
+	Inc(name string)
+	Alert(key, text string)
+	CountAndAlert(key string, threshold int, window time.Duration, text func(count int) string)
+}
+
+// Discard — наблюдение выключено: события никуда не пишутся.
+var Discard Observer = discard{}
+
+type discard struct{}
+
+func (discard) Inc(string)                                                 {}
+func (discard) Alert(string, string)                                       {}
+func (discard) CountAndAlert(string, int, time.Duration, func(int) string) {}
+
 type Store interface {
 	// AddCounters прибавляет значения к счётчикам часа hour.
 	AddCounters(ctx context.Context, hour time.Time, counts map[string]int64) error

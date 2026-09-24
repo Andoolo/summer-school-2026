@@ -127,16 +127,14 @@ type Service struct {
 	onChange func()
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo, now: time.Now, onChange: func() {}}
-}
-
-// WithOnChange задаёт сигнал «брони изменились» — по нему рассыльщик уведомлений
-// отправляет подтверждение или отмену сразу, не дожидаясь своего расписания.
-// Сигнал не должен блокировать запрос.
-func (s *Service) WithOnChange(onChange func()) *Service {
-	s.onChange = onChange
-	return s
+// NewService: onChange — сигнал «брони изменились», по нему рассыльщик уведомлений
+// отправляет подтверждение или отмену сразу, не дожидаясь своего расписания. Сигнал не
+// должен блокировать запрос. nil — без сигнала.
+func NewService(repo Repository, onChange func()) *Service {
+	if onChange == nil {
+		onChange = func() {}
+	}
+	return &Service{repo: repo, now: time.Now, onChange: onChange}
 }
 
 func (s *Service) Create(ctx context.Context, command CreateCommand) (Booking, error) {

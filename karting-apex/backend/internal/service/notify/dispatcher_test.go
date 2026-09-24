@@ -67,7 +67,11 @@ func notice(kind Kind, id string, chat int64) Notice {
 }
 
 func newTestDispatcher(repo *fakeRepo, bot *fakeBot) *Dispatcher {
-	d := NewDispatcher(repo, bot, nil)
+	return newTestDispatcherWith(Config{Repo: repo, Bot: bot})
+}
+
+func newTestDispatcherWith(cfg Config) *Dispatcher {
+	d := NewDispatcher(cfg)
 	d.now = func() time.Time { return testNow }
 	return d
 }

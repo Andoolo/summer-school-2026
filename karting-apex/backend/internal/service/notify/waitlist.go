@@ -33,15 +33,6 @@ type WaitlistRepository interface {
 	ExpireOffer(ctx context.Context, entryID string, now time.Time) error
 }
 
-// WithWaitlist включает раздачу мест из листа ожидания. appURL — адрес приложения для
-// ссылки в сообщении (может быть пустым); ttl — срок предложения.
-func (d *Dispatcher) WithWaitlist(repo WaitlistRepository, ttl time.Duration, appURL string) *Dispatcher {
-	d.waitlist = repo
-	d.offerTTL = ttl
-	d.appURL = strings.TrimRight(appURL, "/")
-	return d
-}
-
 func (d *Dispatcher) runWaitlist(ctx context.Context) int {
 	if d.waitlist == nil || ctx.Err() != nil {
 		return 0

@@ -12,13 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Observer — счётчики и алерты (ops.Recorder). nil — наблюдение выключено.
-type Observer interface {
-	Inc(name string)
-	Alert(key, text string)
-	CountAndAlert(key string, threshold int, window time.Duration, text func(count int) string)
-}
-
 type contextKey string
 
 const requestIDKey contextKey = "request_id"
@@ -44,20 +37,18 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 }
 
 func recoverMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
-	return recoverObservedMiddleware(logger, nil)
+	return recoverObservedMiddleware(logger, ops.Discard)
 }
 
-func recoverObservedMiddleware(logger *slog.Logger, observer Observer) func(http.Handler) http.Handler {
+func recoverObservedMiddleware(logger *slog.Logger, observer ops.Observer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					logger.Error("panic recovered", "panic", recovered, "request_id", RequestID(r.Context()))
-					if observer != nil {
-						observer.Inc(ops.Panics)
-						// Само значение паники — только в журнал: в нём может оказаться что угодно.
-						observer.Alert("panic:"+routePattern(r), fmt.Sprintf("🔥 Паника в %s %s: %s", r.Method, routePattern(r), ops.DescribePanic(recovered)))
-					}
+					observer.Inc(ops.Panics)
+					// Само значение паники — только в журнал: в нём может оказаться что угодно.
+					observer.Alert("panic:"+routePattern(r), fmt.Sprintf("🔥 Паника в %s %s: %s", r.Method, routePattern(r), ops.DescribePanic(recovered)))
 					WriteError(w, http.StatusInternalServerError, CodeInternalError, "Что-то пошло не так. Попробуйте ещё раз позже.", nil)
 				}
 			}()
@@ -87,7 +78,7 @@ func accessLogMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // observeMiddleware считает запросы, ответы 429 и 5xx; всплеск 5xx — алерт администратору.
-func observeMiddleware(observer Observer) func(http.Handler) http.Handler {
+func observeMiddleware(observer ops.Observer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}

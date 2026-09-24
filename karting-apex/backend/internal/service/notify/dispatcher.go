@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"summer-school-2026/backend/internal/ops"
@@ -83,28 +84,21 @@ type Dispatcher struct {
 	offerTTL time.Duration
 	appURL   string
 
-	observer Observer
+	observer ops.Observer
 }
 
-// Observer — счётчики и алерты (ops.Recorder).
-type Observer interface {
-	Inc(name string)
-	Alert(key, text string)
-	CountAndAlert(key string, threshold int, window time.Duration, text func(count int) string)
-}
-
-type noopObserver struct{}
-
-func (noopObserver) Inc(string)                                                 {}
-func (noopObserver) Alert(string, string)                                       {}
-func (noopObserver) CountAndAlert(string, int, time.Duration, func(int) string) {}
-
-// WithObserver подключает счётчики отправок и алерты о сбоях рассылки.
-func (d *Dispatcher) WithObserver(observer Observer) *Dispatcher {
-	if observer != nil {
-		d.observer = observer
-	}
-	return d
+// Config — зависимости рассыльщика. Repo и Bot обязательны; остальное — по желанию.
+type Config struct {
+	Repo   Repository
+	Bot    Bot
+	Logger *slog.Logger
+	// Waitlist включает раздачу мест из листа ожидания (nil — выключена); OfferTTL — срок
+	// предложения; AppURL — адрес приложения для ссылки на заезд (может быть пустым).
+	Waitlist WaitlistRepository
+	OfferTTL time.Duration
+	AppURL   string
+	// Observer — счётчики отправок и алерты о сбоях рассылки (nil — без наблюдения).
+	Observer ops.Observer
 }
 
 // sendOutcome — чем закончилась отправка сообщения.
@@ -157,11 +151,25 @@ func describeSendError(err error) string {
 	return ops.DescribeError(err)
 }
 
-func NewDispatcher(repo Repository, bot Bot, logger *slog.Logger) *Dispatcher {
-	if logger == nil {
-		logger = slog.Default()
+func NewDispatcher(cfg Config) *Dispatcher {
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
 	}
-	return &Dispatcher{repo: repo, bot: bot, logger: logger, now: time.Now, interval: DefaultInterval, wake: make(chan struct{}, 1), observer: noopObserver{}}
+	if cfg.Observer == nil {
+		cfg.Observer = ops.Discard
+	}
+	return &Dispatcher{
+		repo:     cfg.Repo,
+		bot:      cfg.Bot,
+		logger:   cfg.Logger,
+		now:      time.Now,
+		interval: DefaultInterval,
+		wake:     make(chan struct{}, 1),
+		waitlist: cfg.Waitlist,
+		offerTTL: cfg.OfferTTL,
+		appURL:   strings.TrimRight(cfg.AppURL, "/"),
+		observer: cfg.Observer,
+	}
 }
 
 // Wake просит рассыльщика пройтись раньше срока. Не блокирует: если просьба уже

@@ -15,7 +15,7 @@ import (
 func TestOpenAPIParameterErrorsReturnContractError(t *testing.T) {
 	router := httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{
 		Slots:    handlers.NewSlotHandler(nil),
-		Bookings: handlers.NewBookingHandler(booking.NewService(nil)),
+		Bookings: handlers.NewBookingHandler(booking.NewService(nil, nil)),
 	})
 
 	tests := []struct {

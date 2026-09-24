@@ -48,7 +48,7 @@ func TestWaitlistOffersAreSentAndFailuresHandled(t *testing.T) {
 		3: &telegram.APIError{Code: 400, Description: "Bad Request: chat not found"},
 		4: errors.New("network"),
 	}}
-	d := newTestDispatcher(repo, bot).WithWaitlist(wl, 15*time.Minute, "https://apex.example/")
+	d := newTestDispatcherWith(Config{Repo: repo, Bot: bot, Waitlist: wl, OfferTTL: 15 * time.Minute, AppURL: "https://apex.example/"})
 
 	if sent := d.RunOnce(context.Background()); sent != 1 {
 		t.Fatalf("sent = %d, want 1", sent)
@@ -119,7 +119,7 @@ func TestDispatcherReportsToObserver(t *testing.T) {
 		2: &telegram.APIError{Code: 403, Description: "Forbidden: bot was blocked by the user"},
 		3: errors.New("network"), 4: errors.New("network"), 5: errors.New("network: last"),
 	}}
-	newTestDispatcher(repo, bot).WithWaitlist(wl, 15*time.Minute, "").WithObserver(observer).RunOnce(context.Background())
+	newTestDispatcherWith(Config{Repo: repo, Bot: bot, Waitlist: wl, OfferTTL: 15 * time.Minute, Observer: observer}).RunOnce(context.Background())
 
 	if observer.counts["tg_sent"] != 2 || observer.counts["waitlist_offers"] != 1 || observer.counts["tg_blocked"] != 1 || observer.counts["tg_failed"] != 3 {
 		t.Fatalf("counts = %v", observer.counts)
@@ -128,7 +128,7 @@ func TestDispatcherReportsToObserver(t *testing.T) {
 	// но не как ошибка отправки.
 	blockedOffer := &countingObserver{counts: map[string]int{}, window: map[string]int{}}
 	wl2 := &fakeWaitlist{offers: []Offer{offer("blocked-offer", 2)}}
-	newTestDispatcher(&fakeRepo{due: map[Kind][]Notice{}}, bot).WithWaitlist(wl2, 15*time.Minute, "").WithObserver(blockedOffer).RunOnce(context.Background())
+	newTestDispatcherWith(Config{Repo: &fakeRepo{due: map[Kind][]Notice{}}, Bot: bot, Waitlist: wl2, OfferTTL: 15 * time.Minute, Observer: blockedOffer}).RunOnce(context.Background())
 	if blockedOffer.counts["tg_blocked"] != 1 || blockedOffer.counts["tg_failed"] != 0 {
 		t.Fatalf("blocked offer counts = %v, want tg_blocked 1 and no tg_failed", blockedOffer.counts)
 	}

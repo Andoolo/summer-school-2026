@@ -78,15 +78,16 @@ func main() {
 	var botClient *telegram.Client
 	var alertBot ops.Sender
 	if cfg.TelegramBotToken != "" {
-		botClient = telegram.NewClient(cfg.TelegramBotToken)
+		apiBase := ""
 		if cfg.TelegramAPIBase != "" {
 			if cfg.Dev {
-				botClient.WithAPIBase(cfg.TelegramAPIBase)
+				apiBase = cfg.TelegramAPIBase
 				logger.Warn("telegram bot api base overridden for local testing")
 			} else {
 				logger.Error("TELEGRAM_API_BASE ignored in production")
 			}
 		}
+		botClient = telegram.NewClient(cfg.TelegramBotToken, apiBase)
 		alertBot = botClient
 	}
 	if cfg.AdminTelegramChatID != 0 && alertBot == nil {
@@ -119,7 +120,7 @@ func main() {
 	var waitlistStatus, waitlistJoin, waitlistLeave, waitlistMine http.HandlerFunc
 	if botClient != nil {
 		webhookSecret := telegram.WebhookSecret(cfg.TelegramBotToken)
-		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, logger).WithAdminChat(cfg.AdminTelegramChatID)
+		connector := telegram.NewConnector(botClient, cfg.PublicURL, webhookSecret, cfg.AdminTelegramChatID, logger)
 		go connector.Run(ctx)
 		telegramUsername = connector.Username
 		telegramRepo := postgres.NewTelegramLoginRepository(db)
@@ -129,9 +130,15 @@ func main() {
 		// вебхука: отправка сообщений от него не зависит.
 		// Лист ожидания — там же: предложения мест рассылает тот же рассыльщик.
 		waitlistRepo := postgres.NewWaitlistRepository(db)
-		dispatcher := notify.NewDispatcher(postgres.NewNotificationRepository(db), botClient, logger).
-			WithWaitlist(waitlistRepo, waitlist.OfferTTL, cfg.AllowedOrigin).
-			WithObserver(recorder)
+		dispatcher := notify.NewDispatcher(notify.Config{
+			Repo:     postgres.NewNotificationRepository(db),
+			Bot:      botClient,
+			Logger:   logger,
+			Waitlist: waitlistRepo,
+			OfferTTL: waitlist.OfferTTL,
+			AppURL:   cfg.AllowedOrigin,
+			Observer: recorder,
+		})
 		go dispatcher.Run(ctx)
 		onBookingChange = dispatcher.Wake
 		// Кнопка «Отменить бронь» под уведомлениями: нажатия приходят в тот же вебхук.
@@ -160,7 +167,7 @@ func main() {
 	profileRepo := postgres.NewProfileRepository(db)
 	profileService := profile.NewService(profileRepo, logger)
 	profileHandler := handlers.NewProfileHandler(profileService)
-	bookingService := booking.NewService(postgres.NewBookingRepository(db)).WithOnChange(onBookingChange)
+	bookingService := booking.NewService(postgres.NewBookingRepository(db), onBookingChange)
 	bookingHandler := handlers.NewBookingHandler(bookingService)
 	slotRepo := postgres.NewSlotRepository(db)
 	slotHandler := handlers.NewSlotHandler(slotRepo)

@@ -406,7 +406,7 @@ func TestCancelBookingConcurrencyReturnsAvailabilityOnce(t *testing.T) {
 }
 
 func bookingRouter(db *pgxpool.Pool) http.Handler {
-	service := booking.NewService(postgres.NewBookingRepository(db))
+	service := booking.NewService(postgres.NewBookingRepository(db), nil)
 	return httpapi.NewRouter(slog.Default(), httpapi.RouterOptions{Bookings: handlers.NewBookingHandler(service)})
 }
 

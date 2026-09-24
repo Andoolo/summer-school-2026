@@ -92,14 +92,13 @@ type Client struct {
 	http    *http.Client
 }
 
-func NewClient(token string) *Client {
-	return &Client{token: token, apiBase: DefaultAPIBase, http: &http.Client{Timeout: 15 * time.Second}}
-}
-
-// WithAPIBase — адрес API для тестов.
-func (c *Client) WithAPIBase(base string) *Client {
-	c.apiBase = base
-	return c
+// NewClient: apiBase — адрес Bot API; пусто — официальный. Другой адрес нужен тестам и
+// локальному стенду с имитатором Telegram.
+func NewClient(token, apiBase string) *Client {
+	if apiBase == "" {
+		apiBase = DefaultAPIBase
+	}
+	return &Client{token: token, apiBase: apiBase, http: &http.Client{Timeout: 15 * time.Second}}
 }
 
 // WebhookSecret выводит секрет вебхука из токена: Telegram присылает его в заголовке,

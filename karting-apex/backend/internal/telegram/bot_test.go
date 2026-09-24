@@ -28,7 +28,7 @@ func TestClientCallsMethodsAndDecodesResults(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	client := NewClient(testToken).WithAPIBase(server.URL)
+	client := NewClient(testToken, server.URL)
 
 	username, err := client.GetMe(context.Background())
 	if err != nil || username != "apex_login_bot" {
@@ -88,7 +88,7 @@ func TestClientErrorsNeverContainToken(t *testing.T) {
 	}))
 	t.Cleanup(failing.Close)
 
-	_, err := NewClient(testToken).WithAPIBase(failing.URL).GetMe(context.Background())
+	_, err := NewClient(testToken, failing.URL).GetMe(context.Background())
 	if !errors.Is(err, ErrAPI) {
 		t.Fatalf("GetMe() error = %v, want ErrAPI", err)
 	}
@@ -99,7 +99,7 @@ func TestClientErrorsNeverContainToken(t *testing.T) {
 	// Сетевая ошибка: адрес, где никто не слушает. Текст ошибки net/http содержит URL.
 	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	closed.Close()
-	err = NewClient(testToken).WithAPIBase(closed.URL).SendMessage(context.Background(), 1, "x", nil)
+	err = NewClient(testToken, closed.URL).SendMessage(context.Background(), 1, "x", nil)
 	if err == nil || strings.Contains(err.Error(), testToken) || strings.Contains(err.Error(), "SECRET") {
 		t.Fatalf("network error = %v, must exist and not leak token", err)
 	}
@@ -123,7 +123,7 @@ func TestClientAPIErrorCarriesCode(t *testing.T) {
 			w.WriteHeader(tc.status)
 			_, _ = w.Write([]byte(tc.body))
 		}))
-		err := NewClient(testToken).WithAPIBase(server.URL).SendMessage(context.Background(), 1, "x", nil)
+		err := NewClient(testToken, server.URL).SendMessage(context.Background(), 1, "x", nil)
 		server.Close()
 
 		var apiErr *APIError

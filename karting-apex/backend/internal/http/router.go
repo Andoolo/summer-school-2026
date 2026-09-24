@@ -9,6 +9,7 @@ import (
 	instructorsapi "summer-school-2026/backend/internal/http/openapi/instructors"
 	profileapi "summer-school-2026/backend/internal/http/openapi/profile"
 	slotsapi "summer-school-2026/backend/internal/http/openapi/slots"
+	"summer-school-2026/backend/internal/ops"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -66,7 +67,7 @@ type RouterOptions struct {
 	// Лимиты кодов по номеру телефона от этого не зависят — они в сервисах.
 	RateLimit *RateLimitOptions
 	// Observer — счётчики запросов и алерты о всплесках ошибок. nil — выключено.
-	Observer Observer
+	Observer ops.Observer
 }
 
 func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
@@ -80,11 +81,13 @@ func NewRouter(logger *slog.Logger, options ...RouterOptions) http.Handler {
 
 	router := chi.NewRouter()
 	router.Use(requestIDMiddleware)
-	if opts.Observer != nil {
-		// Снаружи recover: паника превращается в 500, и этот ответ тоже посчитается.
-		router.Use(observeMiddleware(opts.Observer))
+	observer := opts.Observer
+	if observer == nil {
+		observer = ops.Discard
 	}
-	router.Use(recoverObservedMiddleware(logger, opts.Observer))
+	// Снаружи recover: паника превращается в 500, и этот ответ тоже посчитается.
+	router.Use(observeMiddleware(observer))
+	router.Use(recoverObservedMiddleware(logger, observer))
 	router.Use(accessLogMiddleware(logger))
 	switch {
 	case opts.Dev:

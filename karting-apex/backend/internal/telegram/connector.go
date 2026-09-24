@@ -29,20 +29,15 @@ type Connector struct {
 // AdminCommands — меню администратора: общее плюс сводка.
 var AdminCommands = append(append([]BotCommand{}, Commands...), BotCommand{Command: "stats", Description: "Сводка по сервису"})
 
-// WithAdminChat показывает администратору в меню команду /stats.
-func (c *Connector) WithAdminChat(chatID int64) *Connector {
-	c.adminChat = chatID
-	return c
-}
-
 // NewConnector: publicURL — внешний адрес сервиса (на Render — RENDER_EXTERNAL_URL).
 // Без него вебхук не регистрируется, а бот не подключается: принимать обновления
-// было бы неоткуда.
-func NewConnector(client *Client, publicURL, secret string, logger *slog.Logger) *Connector {
+// было бы неоткуда. adminChat — чат администратора: ему в меню добавляется /stats
+// (0 — администратора нет).
+func NewConnector(client *Client, publicURL, secret string, adminChat int64, logger *slog.Logger) *Connector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	c := &Connector{client: client, secret: secret, logger: logger}
+	c := &Connector{client: client, secret: secret, adminChat: adminChat, logger: logger}
 	if publicURL != "" {
 		c.webhookURL = strings.TrimRight(publicURL, "/") + "/telegram/webhook"
 	}
