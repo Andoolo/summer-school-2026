@@ -160,3 +160,36 @@ jobs:
 
       - name: compile shared for iOS simulator (arm64)
         run: ./gradlew :shared:compileKotlinIosSimulatorArm64 --console=plain
+
+  e2e:
+    # Сквозные проверки «Апекса»: бот через настоящий вебхук (имитатор Telegram Bot API)
+    # и собранное веб-приложение в headless Chrome. Стенд поднимает karting-apex/e2e/run.sh —
+    # тот же скрипт, что и локально; что проверяется — karting-apex/e2e/README.md.
+    name: E2E · apex
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # cdp.mjs использует встроенный в Node 22 WebSocket.
+          node-version: '22'
+
+      - name: e2e (бот + веб)
+        run: bash karting-apex/e2e/run.sh
+
+      - name: логи и скриншоты
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-apex
+          path: karting-apex/e2e/out/
+          if-no-files-found: ignore

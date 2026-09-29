@@ -1,0 +1,18 @@
+# Поверх backend/compose.yaml: API с ботом, который ходит в имитатор Telegram на хосте
+# (fake_telegram.py, порт 8099), и CORS для веба с http://127.0.0.1:8795.
+# Запускает run.sh; вручную: docker compose -p apexe2e -f backend/compose.yaml -f e2e/compose.e2e.yaml --profile app up -d --build
+services:
+  api:
+    environment:
+      APP_ENV: "development"         # SMS-код приходит в ответе API, демо-вход включён
+      AUTO_MIGRATE: "true"
+      AUTO_SEED: "true"
+      RATE_LIMIT: "off"              # все запросы идут с одного адреса
+      TELEGRAM_BOT_TOKEN: "local-test-token"
+      TELEGRAM_API_BASE: "http://host.docker.internal:8099"
+      PUBLIC_URL: "http://localhost:8090"
+      ADMIN_TELEGRAM_CHAT_ID: "7301"
+      APP_VERSION: "e2e"
+      ALLOWED_ORIGIN: "http://127.0.0.1:8795"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
