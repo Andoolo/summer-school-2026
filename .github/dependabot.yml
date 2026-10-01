@@ -18,6 +18,12 @@ updates:
     groups:
       gradle:
         patterns: ["*"]
+    # Только патчи. Минорные версии здесь не безопаснее мажорных: Kotlin 2.2→2.4 или
+    # kotlinx-datetime 0.7→0.8 (Instant переехал в kotlin.time) ломают сборку, а Kotlin, Compose
+    # и AGP связаны и обновляются только вместе. Такие обновления — плановой миграцией.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /karting-apex/backend
