@@ -1,6 +1,6 @@
 module summer-school-2026/backend
 
-go 1.25.7
+go 1.27.1
 
 require (
 	github.com/getkin/kin-openapi v0.140.0

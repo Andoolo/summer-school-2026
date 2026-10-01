@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/Andoolo/summer-school-2026/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Andoolo/summer-school-2026/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white">
+  <img alt="Go" src="https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2.20-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose Multiplatform" src="https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
@@ -204,14 +204,14 @@ cd client && ./gradlew :webApp:wasmJsBrowserDevelopmentRun
 # 3) Тесты бэкенда
 docker run --rm --network backend_default \
   -e TEST_DATABASE_URL=postgres://volna:volna@db:5432/volna?sslmode=disable \
-  -v "$PWD/backend:/src" -w /src golang:1.25-alpine sh -c "go test ./..."
+  -v "$PWD/backend:/src" -w /src golang:1.27-alpine sh -c "go test ./..."
 ```
 
 ---
 
 ## 🛠️ Технологии и инструменты
 
-- **Backend:** Go 1.25, chi, pgx / PostgreSQL, goose-миграции, слоёная архитектура (HTTP → usecase → domain → storage).
+- **Backend:** Go 1.27, chi, pgx / PostgreSQL, goose-миграции, слоёная архитектура (HTTP → usecase → domain → storage).
 - **Клиент:** Kotlin 2.2.20, Compose Multiplatform — Android / iOS / Web (wasmJs).
 - **Инфра:** Docker Desktop (Postgres + образ API), dev-CORS для локального веба.
 - **ИИ:** GLM-5.2 (ZCode) + Claude Opus 4.8 (Claude Code); сабагенты для ревью и тест-дизайна.
