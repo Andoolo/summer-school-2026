@@ -41,9 +41,9 @@ jobs:
       DATABASE_URL: postgres://volna:volna@localhost:5432/volna?sslmode=disable
       TEST_DATABASE_URL: postgres://volna:volna@localhost:5432/volna?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: ${{ matrix.dir }}/go.sum
@@ -82,14 +82,14 @@ jobs:
           - app: apex
             dir: karting-apex/backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: ${{ matrix.dir }}/go.sum
 
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           # Версия закреплена намеренно: с 'latest' экшен подтянул сборку на go1.24,
           # а проект целится в go1.25 — линтер отказывается читать такой модуль.
@@ -113,9 +113,9 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           # Последний патч ветки: уязвимости стандартной библиотеки закрываются именно им.
@@ -131,7 +131,7 @@ jobs:
     name: Secrets · gitleaks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -161,14 +161,14 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: run tests (commonTest)
         # Общие тесты выполняются на JVM-таргете: он не требует ни Android SDK, ни macOS,
@@ -199,14 +199,14 @@ jobs:
       run:
         working-directory: karting-apex/client
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: compile shared for iOS simulator (arm64)
         run: ./gradlew :shared:compileKotlinIosSimulatorArm64 --console=plain
@@ -219,16 +219,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # cdp.mjs использует встроенный в Node 22 WebSocket.
           node-version: '22'
@@ -238,7 +238,7 @@ jobs:
 
       - name: логи и скриншоты
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-apex
           path: karting-apex/e2e/out/
