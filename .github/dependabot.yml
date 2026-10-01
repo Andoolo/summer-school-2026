@@ -1,0 +1,33 @@
+# Обновления зависимостей «Апекса» раз в неделю: по одному сгруппированному PR на экосистему.
+# «Волна» (референс, не деплоится) сюда не входит, чтобы не удваивать PR; её уязвимости
+# всё равно ловит job «Vulncheck · volna».
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /karting-apex/backend
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: /karting-apex/client
+    schedule:
+      interval: weekly
+    groups:
+      gradle:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /karting-apex/backend
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

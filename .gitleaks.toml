@@ -1,0 +1,7 @@
+# gitleaks (CI: job «Secrets · gitleaks»): стандартные правила + исключения для ложных срабатываний.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Код oapi-codegen: встроенная OpenAPI-спецификация в base64 похожа на ключ"
+paths = ['''(^|/)internal/http/openapi/.+\.gen\.go$''']

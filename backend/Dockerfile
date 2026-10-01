@@ -6,7 +6,7 @@ RUN go mod download
 COPY . ./
 RUN go build -o /out/api ./cmd/api
 
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN adduser -D -H appuser
 USER appuser

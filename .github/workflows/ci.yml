@@ -96,6 +96,56 @@ jobs:
           version: v2.12.2
           working-directory: ${{ matrix.dir }}
 
+  vulncheck:
+    # Известные уязвимости в зависимостях и стандартной библиотеке Go, до которых код
+    # реально дотягивается: govulncheck смотрит граф вызовов, а не только go.mod.
+    name: Vulncheck · ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: volna
+            dir: backend
+          - app: apex
+            dir: karting-apex/backend
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          # Последний патч ветки: уязвимости стандартной библиотеки закрываются именно им.
+          check-latest: true
+          cache-dependency-path: ${{ matrix.dir }}/go.sum
+
+      - name: govulncheck
+        # v1.8.0 требует Go 1.26, проект пока на 1.25.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+  secrets:
+    # Токены и ключи во всей истории git. Ложные срабатывания исключены в .gitleaks.toml.
+    name: Secrets · gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        env:
+          VERSION: 8.30.1
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v$VERSION"
+          curl -sSfLO "$base/gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "$base/gitleaks_${VERSION}_checksums.txt"
+          grep " gitleaks_${VERSION}_linux_x64.tar.gz$" "gitleaks_${VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "gitleaks_${VERSION}_linux_x64.tar.gz" gitleaks
+          ./gitleaks git --redact --no-banner --verbose .
+
   client:
     name: Client · ${{ matrix.app }}
     runs-on: ubuntu-latest
